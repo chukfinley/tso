@@ -5,6 +5,11 @@
 # A Debian-based Server Management System
 ################################################################################
 
+# Ensure script is running with bash (not sh)
+if [ -z "$BASH_VERSION" ]; then
+    exec bash "$0" "$@"
+fi
+
 set -e  # Exit on error
 
 # Colors for output

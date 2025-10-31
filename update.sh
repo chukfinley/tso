@@ -5,6 +5,11 @@
 # Updates ServerOS to latest version from GitHub
 ################################################################################
 
+# Ensure script is running with bash (not sh)
+if [ -z "$BASH_VERSION" ]; then
+    exec bash "$0" "$@"
+fi
+
 set -e
 
 # Colors
