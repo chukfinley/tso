@@ -21,18 +21,30 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function loadShares() {
     fetch('/api/share-control.php?action=list')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                return response.json();
+            } else {
+                return response.text().then(text => {
+                    throw new Error(`Expected JSON, got: ${text.substring(0, 100)}`);
+                });
+            }
+        })
         .then(data => {
             if (data.success) {
-                allShares = data.shares;
-                displayShares(data.shares);
+                allShares = data.shares || [];
+                displayShares(allShares);
             } else {
-                showError('Failed to load shares: ' + data.error);
+                showError('Failed to load shares: ' + (data.error || 'Unknown error'));
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            showError('Failed to load shares');
+            console.error('Error loading shares:', error);
+            showError('Failed to load shares: ' + error.message);
         });
 }
 

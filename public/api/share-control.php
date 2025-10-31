@@ -3,31 +3,32 @@
  * Share Management API
  */
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config/config.php';
-require_once SRC_PATH . '/Database.php';
-require_once SRC_PATH . '/User.php';
-require_once SRC_PATH . '/Auth.php';
-require_once SRC_PATH . '/Share.php';
-
-$auth = new Auth();
-
-// Check if user is logged in
-if (!$auth->check()) {
-    http_response_code(401);
-    echo json_encode(['success' => false, 'error' => 'Unauthorized']);
-    exit;
-}
-
-$share = new Share();
-$action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 try {
+    require_once __DIR__ . '/../../config/config.php';
+    require_once SRC_PATH . '/Database.php';
+    require_once SRC_PATH . '/User.php';
+    require_once SRC_PATH . '/Auth.php';
+    require_once SRC_PATH . '/Share.php';
+
+    $auth = new Auth();
+
+    // Check if user is logged in
+    if (!$auth->check()) {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'error' => 'Unauthorized']);
+        exit;
+    }
+
+    $share = new Share();
+    $action = $_GET['action'] ?? $_POST['action'] ?? '';
+
     switch ($action) {
         // ============ Share Operations ============
         
         case 'list':
             $shares = $share->getAll();
-            echo json_encode(['success' => true, 'shares' => $shares]);
+            echo json_encode(['success' => true, 'shares' => $shares ?: []]);
             break;
 
         case 'get':
@@ -285,6 +286,20 @@ try {
     echo json_encode([
         'success' => false,
         'error' => $e->getMessage()
+    ]);
+} catch (Error $e) {
+    // Catch fatal errors (PHP 7+)
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'error' => 'Internal server error: ' . $e->getMessage()
+    ]);
+} catch (Throwable $e) {
+    // Catch any other throwable (PHP 7+)
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'error' => 'Unexpected error: ' . $e->getMessage()
     ]);
 }
 

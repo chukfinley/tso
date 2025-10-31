@@ -479,4 +479,3 @@ function cleanupOldLogs($logger) {
         error_log("Log cleanup error: " . $e->getMessage());
     }
 }
-

@@ -118,4 +118,3 @@ echo json_encode([
     'action' => $action,
     'note' => 'The system will ' . strtolower($actionName) . ' shortly. This page may become unavailable.'
 ]);
-
