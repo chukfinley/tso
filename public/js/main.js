@@ -51,8 +51,8 @@ function initSystemMonitoring() {
     // Initial fetch
     fetchSystemStats();
     
-    // Update every 3 seconds
-    setInterval(fetchSystemStats, 3000);
+    // Update every 1 second
+    setInterval(fetchSystemStats, 1000);
     
     // Update system time every second
     setInterval(updateSystemTime, 1000);
@@ -174,7 +174,7 @@ function updateNetworkInfo(interfaces) {
         let txSpeed = 'N/A';
         
         if (lastNetworkStats[iface.name]) {
-            const timeDiff = 3; // seconds between updates
+            const timeDiff = 1; // seconds between updates
             const rxDiff = iface.rx_bytes - lastNetworkStats[iface.name].rx_bytes;
             const txDiff = iface.tx_bytes - lastNetworkStats[iface.name].tx_bytes;
             
