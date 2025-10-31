@@ -1,9 +1,17 @@
 <?php
+// Suppress output buffering and ensure clean JSON output
+ob_start();
+error_reporting(E_ALL);
+ini_set('display_errors', 0); // Suppress error display for API responses
+ini_set('log_errors', 1);
+
 require_once __DIR__ . '/../../config/config.php';
 require_once SRC_PATH . '/Database.php';
 require_once SRC_PATH . '/Auth.php';
 require_once SRC_PATH . '/VM.php';
 
+// Clear any output that might have been generated
+ob_clean();
 header('Content-Type: application/json');
 
 $auth = new Auth();
@@ -52,9 +60,21 @@ try {
 
             // Ensure ISO directory exists
             if (!is_dir($isoDir)) {
-                if (!mkdir($isoDir, 0755, true)) {
+                if (!mkdir($isoDir, 0775, true)) {
                     throw new Exception('Failed to create ISO directory');
                 }
+                // Set ownership to www-data if possible (suppress errors if not permitted)
+                if (function_exists('posix_getpwuid') && function_exists('posix_geteuid')) {
+                    $wwwDataUid = posix_getpwnam('www-data')['uid'] ?? null;
+                    if ($wwwDataUid !== null) {
+                        @chown($isoDir, $wwwDataUid);
+                    }
+                }
+            }
+            
+            // Check if directory is writable
+            if (!is_writable($isoDir)) {
+                throw new Exception('ISO directory is not writable. Please check permissions on: ' . $isoDir);
             }
 
             // Check if file already exists
@@ -69,11 +89,28 @@ try {
 
             // Move uploaded file to ISO directory
             if (!move_uploaded_file($fileTmpPath, $destinationPath)) {
-                throw new Exception('Failed to save uploaded file');
+                // Get more detailed error information
+                $error = error_get_last();
+                $errorMsg = 'Failed to save uploaded file';
+                if ($error && $error['message']) {
+                    $errorMsg .= ': ' . $error['message'];
+                }
+                if (!is_writable(dirname($destinationPath))) {
+                    $errorMsg .= ' - Directory is not writable';
+                }
+                throw new Exception($errorMsg);
             }
 
             // Set proper permissions (readable by all, writable by owner)
             chmod($destinationPath, 0644);
+            
+            // Try to set ownership to www-data if possible (suppress errors if not permitted)
+            if (function_exists('posix_getpwuid') && function_exists('posix_geteuid')) {
+                $wwwDataUid = posix_getpwnam('www-data')['uid'] ?? null;
+                if ($wwwDataUid !== null) {
+                    @chown($destinationPath, $wwwDataUid);
+                }
+            }
 
             // Log activity
             $db->query(
@@ -91,6 +128,8 @@ try {
                 return round($bytes, $precision) . ' ' . $units[$pow];
             };
 
+            // Clear output buffer to ensure clean JSON
+            ob_clean();
             echo json_encode([
                 'success' => true,
                 'message' => 'ISO file uploaded successfully',
@@ -99,7 +138,7 @@ try {
                 'size' => $fileSize,
                 'size_formatted' => $formatBytes($fileSize)
             ]);
-            break;
+            exit;
         case 'start':
             $vm->start($vmId);
 
@@ -225,8 +264,18 @@ try {
             break;
 
         default:
+            ob_clean();
             echo json_encode(['success' => false, 'error' => 'Invalid action']);
+            exit;
     }
 } catch (Exception $e) {
+    ob_clean();
+    http_response_code(500);
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    exit;
+} catch (Error $e) {
+    ob_clean();
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Server error: ' . $e->getMessage()]);
+    exit;
 }

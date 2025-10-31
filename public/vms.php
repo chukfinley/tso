@@ -547,7 +547,33 @@ function uploadIso(mode = 'create') {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(async response => {
+        // Read response text once
+        const text = await response.text();
+        
+        // Check if response is OK
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status} - ${text.substring(0, 100)}`);
+        }
+        
+        // Check if empty
+        if (!text || text.trim().length === 0) {
+            throw new Error('Empty response from server');
+        }
+        
+        // Check content type
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('Invalid response format. Expected JSON but got: ' + text.substring(0, 100));
+        }
+        
+        // Parse JSON
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            throw new Error('Invalid JSON response: ' + text.substring(0, 200));
+        }
+    })
     .then(data => {
         if (data.success) {
             progress.textContent = '✓ Upload complete: ' + data.filename;
@@ -595,6 +621,8 @@ function uploadIso(mode = 'create') {
         progress.textContent = '✗ Error: ' + error.message;
         progress.style.color = '#f00';
         input.value = '';
+        
+        console.error('ISO upload error:', error);
         
         // Hide progress after 5 seconds
         setTimeout(() => {

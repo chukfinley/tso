@@ -274,9 +274,12 @@ configure_app() {
     sed -i "s/define('DB_USER', 'root');/define('DB_USER', '${DB_USER}');/" ${INSTALL_DIR}/config/config.php
     sed -i "s/define('DB_PASS', '');/define('DB_PASS', '${DB_PASS}');/" ${INSTALL_DIR}/config/config.php
 
-    # Update base URL
+    # Update base URL to HTTPS
+    IP_ADDRESS=$(hostname -I | awk '{print $1}')
     HOSTNAME=$(hostname -f 2>/dev/null || hostname)
-    sed -i "s#define('BASE_URL', 'http://localhost');#define('BASE_URL', 'http://${HOSTNAME}');#" ${INSTALL_DIR}/config/config.php
+    # Use IP address for BASE_URL if available, otherwise use hostname
+    BASE_HOST="${IP_ADDRESS:-${HOSTNAME}}"
+    sed -i "s#define('BASE_URL', 'http://localhost');#define('BASE_URL', 'https://${BASE_HOST}');#" ${INSTALL_DIR}/config/config.php
 
     # Disable error display for production
     sed -i "s/ini_set('display_errors', 1);/ini_set('display_errors', 0);/" ${INSTALL_DIR}/config/config.php
@@ -326,14 +329,89 @@ create_admin_user() {
 }
 
 configure_apache() {
-    print_info "Configuring Apache2..."
+    print_info "Configuring Apache2 with SSL/HTTPS..."
 
-    # Create Apache configuration
+    # Get server IP address
+    IP_ADDRESS=$(hostname -I | awk '{print $1}')
+    HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+
+    # SSL certificate directory
+    SSL_DIR="/etc/ssl/serveros"
+    mkdir -p ${SSL_DIR}
+
+    # Generate self-signed SSL certificate that works with IP addresses
+    print_info "Generating self-signed SSL certificate..."
+    
+    # Create certificate configuration for IP address
+    cat > /tmp/serveros-ssl.conf << EOF
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+C = US
+ST = State
+L = City
+O = ServerOS
+CN = ${IP_ADDRESS}
+
+[v3_req]
+keyUsage = keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+IP.1 = ${IP_ADDRESS}
+DNS.1 = ${HOSTNAME}
+DNS.2 = localhost
+EOF
+
+    # Generate private key and certificate
+    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+        -keyout ${SSL_DIR}/serveros.key \
+        -out ${SSL_DIR}/serveros.crt \
+        -config /tmp/serveros-ssl.conf \
+        -extensions v3_req > /dev/null 2>&1
+
+    # Set proper permissions
+    chmod 600 ${SSL_DIR}/serveros.key
+    chmod 644 ${SSL_DIR}/serveros.crt
+    rm -f /tmp/serveros-ssl.conf
+
+    print_success "SSL certificate generated"
+
+    # Create Apache configuration with HTTP redirect and HTTPS
     cat > ${APACHE_CONF} << EOF
+# HTTP VirtualHost - Redirect to HTTPS
 <VirtualHost *:80>
-    ServerName $(hostname -f 2>/dev/null || hostname)
+    ServerName ${HOSTNAME}
+    ServerAdmin admin@localhost
+
+    # Redirect all HTTP traffic to HTTPS
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+    ErrorLog \${APACHE_LOG_DIR}/serveros_error.log
+    CustomLog \${APACHE_LOG_DIR}/serveros_access.log combined
+</VirtualHost>
+
+# HTTPS VirtualHost - Main site
+<VirtualHost *:443>
+    ServerName ${HOSTNAME}
     ServerAdmin admin@localhost
     DocumentRoot ${WEB_ROOT}
+
+    # SSL Configuration
+    SSLEngine on
+    SSLCertificateFile ${SSL_DIR}/serveros.crt
+    SSLCertificateKeyFile ${SSL_DIR}/serveros.key
+
+    # SSL Security Settings
+    SSLProtocol all -SSLv2 -SSLv3
+    SSLCipherSuite HIGH:!aNULL:!MD5
+    SSLHonorCipherOrder on
 
     <Directory ${WEB_ROOT}>
         Options -Indexes +FollowSymLinks
@@ -364,12 +442,14 @@ configure_apache() {
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set X-Content-Type-Options "nosniff"
     Header always set X-XSS-Protection "1; mode=block"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
 </VirtualHost>
 EOF
 
     # Enable required Apache modules
     a2enmod rewrite > /dev/null 2>&1
     a2enmod headers > /dev/null 2>&1
+    a2enmod ssl > /dev/null 2>&1
     a2enmod php$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;') > /dev/null 2>&1 || true
 
     # Disable default site
@@ -378,7 +458,7 @@ EOF
     # Enable TSO site
     a2ensite serveros > /dev/null 2>&1
 
-    print_success "Apache configured"
+    print_success "Apache configured with SSL/HTTPS"
 }
 
 set_permissions() {
