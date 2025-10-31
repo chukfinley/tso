@@ -7,14 +7,25 @@ class Share {
     private $db;
     private $sambaConfPath = '/etc/samba/smb.conf';
     private $shareBasePath = '/srv/samba';
+    private $isRoot = false;
 
     public function __construct() {
         $this->db = Database::getInstance();
+        
+        // Check if running as root
+        $this->isRoot = (posix_geteuid() === 0);
         
         // Ensure share base directory exists
         if (!is_dir($this->shareBasePath)) {
             mkdir($this->shareBasePath, 0755, true);
         }
+    }
+
+    /**
+     * Get command prefix (sudo if not root, empty if root)
+     */
+    private function getSudoPrefix() {
+        return $this->isRoot ? '' : 'sudo ';
     }
 
     // ============ Share Management ============
@@ -564,20 +575,34 @@ class Share {
         
         // Ensure /etc/samba directory exists
         $sambaDir = dirname($this->sambaConfPath);
-        exec("sudo mkdir -p $sambaDir 2>&1", $output, $returnCode);
-        if ($returnCode !== 0) {
-            throw new Exception("Failed to create Samba directory: " . implode("\n", $output));
+        if (!is_dir($sambaDir)) {
+            // Try PHP native mkdir first if we're root (more reliable)
+            if ($this->isRoot) {
+                if (!mkdir($sambaDir, 0755, true)) {
+                    throw new Exception("Failed to create Samba directory: $sambaDir");
+                }
+            } else {
+                // Use sudo for non-root users
+                $sudo = $this->getSudoPrefix();
+                exec("$sudo mkdir -p $sambaDir 2>&1", $output, $returnCode);
+                if ($returnCode !== 0) {
+                    throw new Exception("Failed to create Samba directory: " . implode("\n", $output));
+                }
+            }
         }
         
-        // Move to actual location with sudo
-        exec("sudo mv $tempFile {$this->sambaConfPath} 2>&1", $output, $returnCode);
+        // Get sudo prefix for commands below
+        $sudo = $this->getSudoPrefix();
+        
+        // Move to actual location
+        exec("$sudo mv $tempFile {$this->sambaConfPath} 2>&1", $output, $returnCode);
         
         if ($returnCode !== 0) {
             throw new Exception("Failed to update Samba configuration: " . implode("\n", $output));
         }
 
         // Set proper permissions
-        exec("sudo chmod 644 {$this->sambaConfPath}");
+        exec("$sudo chmod 644 {$this->sambaConfPath}");
         
         return true;
     }
@@ -586,11 +611,12 @@ class Share {
      * Reload Samba service
      */
     private function reloadSamba() {
-        exec("sudo systemctl reload smbd 2>&1", $output, $returnCode);
+        $sudo = $this->getSudoPrefix();
+        exec("$sudo systemctl reload smbd 2>&1", $output, $returnCode);
         
         if ($returnCode !== 0) {
             // Try alternative command
-            exec("sudo service smbd reload 2>&1", $output2, $returnCode2);
+            exec("$sudo service smbd reload 2>&1", $output2, $returnCode2);
             if ($returnCode2 !== 0) {
                 throw new Exception("Failed to reload Samba service");
             }
@@ -603,10 +629,11 @@ class Share {
      * Create Samba user
      */
     private function createSambaUser($username, $password) {
+        $sudo = $this->getSudoPrefix();
         // Create system user if it doesn't exist
         exec("id -u $username > /dev/null 2>&1", $output, $returnCode);
         if ($returnCode !== 0) {
-            exec("sudo useradd -M -s /sbin/nologin $username 2>&1", $output, $returnCode);
+            exec("$sudo useradd -M -s /sbin/nologin $username 2>&1", $output, $returnCode);
             if ($returnCode !== 0) {
                 throw new Exception("Failed to create system user");
             }
@@ -614,9 +641,10 @@ class Share {
 
         // Add to Samba
         $cmd = sprintf(
-            '(echo %s; echo %s) | sudo smbpasswd -a -s %s 2>&1',
+            '(echo %s; echo %s) | %s smbpasswd -a -s %s 2>&1',
             escapeshellarg($password),
             escapeshellarg($password),
+            $sudo,
             escapeshellarg($username)
         );
         
@@ -633,10 +661,12 @@ class Share {
      * Update Samba user password
      */
     private function updateSambaPassword($username, $password) {
+        $sudo = $this->getSudoPrefix();
         $cmd = sprintf(
-            '(echo %s; echo %s) | sudo smbpasswd -s %s 2>&1',
+            '(echo %s; echo %s) | %s smbpasswd -s %s 2>&1',
             escapeshellarg($password),
             escapeshellarg($password),
+            $sudo,
             escapeshellarg($username)
         );
         
@@ -653,11 +683,12 @@ class Share {
      * Delete Samba user
      */
     private function deleteSambaUser($username) {
-        exec("sudo smbpasswd -x $username 2>&1", $output, $returnCode);
+        $sudo = $this->getSudoPrefix();
+        exec("$sudo smbpasswd -x $username 2>&1", $output, $returnCode);
         // Don't throw error if user doesn't exist in Samba
         
         // Optionally delete system user
-        exec("sudo userdel $username 2>&1");
+        exec("$sudo userdel $username 2>&1");
         
         return true;
     }
@@ -666,8 +697,9 @@ class Share {
      * Toggle Samba user status
      */
     private function toggleSambaUser($username, $enable) {
+        $sudo = $this->getSudoPrefix();
         $flag = $enable ? '-e' : '-d';
-        exec("sudo smbpasswd $flag $username 2>&1", $output, $returnCode);
+        exec("$sudo smbpasswd $flag $username 2>&1", $output, $returnCode);
         
         if ($returnCode !== 0) {
             throw new Exception("Failed to toggle Samba user status");
@@ -680,7 +712,8 @@ class Share {
      * Test Samba configuration
      */
     public function testSambaConfig() {
-        exec("sudo testparm -s {$this->sambaConfPath} 2>&1", $output, $returnCode);
+        $sudo = $this->getSudoPrefix();
+        exec("$sudo testparm -s {$this->sambaConfPath} 2>&1", $output, $returnCode);
         
         return [
             'valid' => $returnCode === 0,
@@ -692,12 +725,13 @@ class Share {
      * Get Samba status
      */
     public function getSambaStatus() {
-        exec("sudo systemctl is-active smbd 2>&1", $output, $returnCode);
+        $sudo = $this->getSudoPrefix();
+        exec("$sudo systemctl is-active smbd 2>&1", $output, $returnCode);
         $active = trim(implode('', $output)) === 'active';
 
         if (!$active) {
             // Try alternative service name
-            exec("sudo service smbd status 2>&1", $output2, $returnCode2);
+            exec("$sudo service smbd status 2>&1", $output2, $returnCode2);
             $active = $returnCode2 === 0;
         }
 
@@ -711,7 +745,8 @@ class Share {
      * Get connected clients
      */
     public function getConnectedClients() {
-        exec("sudo smbstatus -b 2>&1", $output, $returnCode);
+        $sudo = $this->getSudoPrefix();
+        exec("$sudo smbstatus -b 2>&1", $output, $returnCode);
         
         if ($returnCode !== 0) {
             return [];
@@ -771,8 +806,9 @@ class Share {
             throw new Exception("Failed to create directory");
         }
 
-        exec("sudo chown root:root $path");
-        exec("sudo chmod $mode $path");
+        $sudo = $this->getSudoPrefix();
+        exec("$sudo chown root:root $path");
+        exec("$sudo chmod $mode $path");
 
         return true;
     }
