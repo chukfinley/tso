@@ -40,7 +40,7 @@ async function logClientError(errorDetails) {
 /**
  * Helper function to handle API responses and extract error details
  */
-async function handleApiResponse(response, endpoint, action) {
+async function handleApiResponse(response, endpoint, action, method = 'GET') {
     // Read response text first (needed for both OK and error responses)
     const text = await response.text();
     
@@ -61,30 +61,37 @@ async function handleApiResponse(response, endpoint, action) {
     
     // If response is not OK, log detailed error and throw
     if (!response.ok) {
+        const status = response.status;
+        let derivedError = data?.error || `HTTP ${status} Error`;
+
+        if (status >= 300 && status < 400) {
+            derivedError = 'Secure connection required. Reload this page over HTTPS.';
+        }
+
         const errorDetails = {
             endpoint: endpoint,
             action: action,
             status: response.status,
             statusText: response.statusText,
-            error: data?.error || `HTTP ${response.status} Error`,
+            error: derivedError,
             file: data?.file || 'unknown',
             line: data?.line || 'unknown',
             trace: data?.trace || null,
             response_text: text.substring(0, 2000),
             url: endpoint,
-            method: 'GET',
+            method: method,
             timestamp: new Date().toISOString()
         };
         
         // Log to server
         await logClientError({
             level: 'error',
-            message: `API Error: ${action} - ${errorDetails.error}`,
+            message: `API Error: ${action} - ${derivedError}`,
             context: errorDetails
         });
         
         // Create error object with all details
-        const error = new Error(data?.error || `HTTP error! status: ${response.status}`);
+        const error = new Error(derivedError);
         error.details = errorDetails;
         error.responseData = data;
         throw error;
@@ -101,7 +108,7 @@ async function handleApiResponse(response, endpoint, action) {
             line: data.line || null,
             trace: data.trace || null,
             url: endpoint,
-            method: 'GET',
+            method: method,
             timestamp: new Date().toISOString()
         };
         
@@ -118,7 +125,26 @@ async function handleApiResponse(response, endpoint, action) {
         throw error;
     }
     
-    return data;
+    return data ?? {};
+}
+
+/**
+ * Convenience wrapper around fetch + handleApiResponse
+ */
+function apiFetch(endpoint, action, options = {}) {
+    const fetchOptions = {
+        credentials: 'same-origin',
+        ...options
+    };
+
+    // Ensure we don't override provided credentials explicitly set to something else
+    if (options && Object.prototype.hasOwnProperty.call(options, 'credentials')) {
+        fetchOptions.credentials = options.credentials;
+    }
+
+    const method = fetchOptions.method || 'GET';
+    return fetch(endpoint, fetchOptions)
+        .then(response => handleApiResponse(response, endpoint, action, method));
 }
 
 function loadShares() {
@@ -133,10 +159,9 @@ function loadShares() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
     
-    fetch('/api/share-control.php?action=list', {
+    apiFetch('/api/share-control.php?action=list', 'list', {
         signal: controller.signal
     })
-        .then(response => handleApiResponse(response, '/api/share-control.php', 'list'))
         .then(data => {
             clearTimeout(timeoutId);
             allShares = data.shares || [];
@@ -192,7 +217,7 @@ function displayShares(shares) {
 
     let html = '';
     shares.forEach(share => {
-        const isActive = parseInt(share.is_active) === 1;
+        const isActive = parseInt(share.is_active, 10) === 1;
         const statusClass = isActive ? 'status-active' : 'status-inactive';
         const statusText = isActive ? 'Active' : 'Inactive';
         
@@ -253,42 +278,41 @@ function showCreateShareModal() {
 }
 
 function editShare(id) {
-    fetch(`/api/share-control.php?action=get&id=${id}`)
-        .then(response => response.json())
+    apiFetch(`/api/share-control.php?action=get&id=${id}`, 'get_share')
         .then(data => {
-            if (data.success) {
-                const share = data.share;
-                document.getElementById('shareModalTitle').textContent = 'Edit Share';
-                document.getElementById('share_id').value = share.id;
-                document.getElementById('share_name').value = share.share_name;
-                document.getElementById('share_name').disabled = true; // Can't change share name
-                document.getElementById('display_name').value = share.display_name || '';
-                document.getElementById('path').value = share.path;
-                document.getElementById('comment').value = share.comment || '';
-                document.getElementById('browseable').checked = parseInt(share.browseable) === 1;
-                document.getElementById('readonly').checked = parseInt(share.readonly) === 1;
-                document.getElementById('guest_ok').checked = parseInt(share.guest_ok) === 1;
-                document.getElementById('case_sensitive').value = share.case_sensitive;
-                document.getElementById('preserve_case').checked = parseInt(share.preserve_case) === 1;
-                document.getElementById('short_preserve_case').checked = parseInt(share.short_preserve_case) === 1;
-                document.getElementById('create_mask').value = share.create_mask;
-                document.getElementById('directory_mask').value = share.directory_mask;
-                document.getElementById('force_user').value = share.force_user || '';
-                document.getElementById('force_group').value = share.force_group || '';
-                
-                currentShareId = id;
-                
-                // Load existing permissions
-                loadSharePermissionsForEdit(id);
-                
-                $('#shareModal').modal('show');
-            } else {
-                showError('Failed to load share: ' + data.error);
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load share');
             }
+
+            const share = data.share;
+            document.getElementById('shareModalTitle').textContent = 'Edit Share';
+            document.getElementById('share_id').value = share.id;
+            document.getElementById('share_name').value = share.share_name;
+            document.getElementById('share_name').disabled = true; // Can't change share name
+            document.getElementById('display_name').value = share.display_name || '';
+            document.getElementById('path').value = share.path;
+            document.getElementById('comment').value = share.comment || '';
+            document.getElementById('browseable').checked = parseInt(share.browseable, 10) === 1;
+            document.getElementById('readonly').checked = parseInt(share.readonly, 10) === 1;
+            document.getElementById('guest_ok').checked = parseInt(share.guest_ok, 10) === 1;
+            document.getElementById('case_sensitive').value = share.case_sensitive;
+            document.getElementById('preserve_case').checked = parseInt(share.preserve_case, 10) === 1;
+            document.getElementById('short_preserve_case').checked = parseInt(share.short_preserve_case, 10) === 1;
+            document.getElementById('create_mask').value = share.create_mask;
+            document.getElementById('directory_mask').value = share.directory_mask;
+            document.getElementById('force_user').value = share.force_user || '';
+            document.getElementById('force_group').value = share.force_group || '';
+            
+            currentShareId = id;
+            
+            // Load existing permissions
+            loadSharePermissionsForEdit(id);
+            
+            $('#shareModal').modal('show');
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to load share');
+            showError('Failed to load share: ' + (error.message || 'Unknown error'));
         });
 }
 
@@ -314,11 +338,10 @@ function saveShare() {
     formData.set('preserve_case', document.getElementById('preserve_case').checked ? '1' : '0');
     formData.set('short_preserve_case', document.getElementById('short_preserve_case').checked ? '1' : '0');
 
-    fetch('/api/share-control.php', {
+    apiFetch('/api/share-control.php', shareId ? 'update_share' : 'create_share', {
         method: 'POST',
         body: formData
     })
-        .then(response => response.json())
         .then(data => {
             if (data.success) {
                 showSuccess(data.message);
@@ -335,7 +358,7 @@ function saveShare() {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to save share');
+            showError('Failed to save share: ' + (error.message || 'Unknown error'));
         });
 }
 
@@ -344,11 +367,10 @@ function toggleShare(id) {
     formData.append('action', 'toggle');
     formData.append('id', id);
 
-    fetch('/api/share-control.php', {
+    apiFetch('/api/share-control.php', 'toggle_share', {
         method: 'POST',
         body: formData
     })
-        .then(response => response.json())
         .then(data => {
             if (data.success) {
                 showSuccess(data.message);
@@ -359,7 +381,7 @@ function toggleShare(id) {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to toggle share');
+            showError('Failed to toggle share: ' + (error.message || 'Unknown error'));
         });
 }
 
@@ -375,11 +397,10 @@ function deleteShare(id, name) {
     formData.append('id', id);
     formData.append('delete_directory', deleteDir ? '1' : '0');
 
-    fetch('/api/share-control.php', {
+    apiFetch('/api/share-control.php', 'delete_share', {
         method: 'POST',
         body: formData
     })
-        .then(response => response.json())
         .then(data => {
             if (data.success) {
                 showSuccess(data.message);
@@ -390,15 +411,14 @@ function deleteShare(id, name) {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to delete share');
+            showError('Failed to delete share: ' + (error.message || 'Unknown error'));
         });
 }
 
 // ============ User Operations ============
 
 function loadUsers() {
-    fetch('/api/share-control.php?action=list_users')
-        .then(response => response.json())
+    apiFetch('/api/share-control.php?action=list_users', 'list_users')
         .then(data => {
             if (data.success) {
                 allUsers = data.users;
@@ -409,7 +429,7 @@ function loadUsers() {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to load users');
+            showError('Failed to load users: ' + (error.message || 'Unknown error'));
         });
 }
 
@@ -423,7 +443,7 @@ function displayUsers(users) {
 
     let html = '';
     users.forEach(user => {
-        const isActive = parseInt(user.is_active) === 1;
+        const isActive = parseInt(user.is_active, 10) === 1;
         const statusClass = isActive ? 'status-active' : 'status-inactive';
         const statusText = isActive ? 'Active' : 'Inactive';
         
@@ -492,11 +512,10 @@ function saveUser() {
         formData.append('id', userId);
     }
 
-    fetch('/api/share-control.php', {
+    apiFetch('/api/share-control.php', userId ? 'update_user_password' : 'create_user', {
         method: 'POST',
         body: formData
     })
-        .then(response => response.json())
         .then(data => {
             if (data.success) {
                 showSuccess(data.message);
@@ -508,7 +527,7 @@ function saveUser() {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to save user');
+            showError('Failed to save user: ' + (error.message || 'Unknown error'));
         });
 }
 
@@ -532,11 +551,10 @@ function toggleUser(id) {
     formData.append('action', 'toggle_user');
     formData.append('id', id);
 
-    fetch('/api/share-control.php', {
+    apiFetch('/api/share-control.php', 'toggle_user', {
         method: 'POST',
         body: formData
     })
-        .then(response => response.json())
         .then(data => {
             if (data.success) {
                 showSuccess(data.message);
@@ -547,7 +565,7 @@ function toggleUser(id) {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to toggle user');
+            showError('Failed to toggle user: ' + (error.message || 'Unknown error'));
         });
 }
 
@@ -560,11 +578,10 @@ function deleteUser(id, username) {
     formData.append('action', 'delete_user');
     formData.append('id', id);
 
-    fetch('/api/share-control.php', {
+    apiFetch('/api/share-control.php', 'delete_user', {
         method: 'POST',
         body: formData
     })
-        .then(response => response.json())
         .then(data => {
             if (data.success) {
                 showSuccess(data.message);
@@ -575,7 +592,7 @@ function deleteUser(id, username) {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to delete user');
+            showError('Failed to delete user: ' + (error.message || 'Unknown error'));
         });
 }
 
@@ -587,8 +604,7 @@ function managePermissions(shareId) {
 
     document.getElementById('permissionsModalTitle').textContent = `Manage Permissions: ${share.share_name}`;
     
-    fetch(`/api/share-control.php?action=get_permissions&share_id=${shareId}`)
-        .then(response => response.json())
+    apiFetch(`/api/share-control.php?action=get_permissions&share_id=${shareId}`, 'get_permissions')
         .then(data => {
             if (data.success) {
                 displayPermissions(shareId, data.permissions);
@@ -599,7 +615,7 @@ function managePermissions(shareId) {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to load permissions');
+            showError('Failed to load permissions: ' + (error.message || 'Unknown error'));
         });
 }
 
@@ -644,7 +660,7 @@ function displayPermissions(shareId, permissions) {
 }
 
 function addPermissionRow(shareId) {
-    const availableUsers = allUsers.filter(user => parseInt(user.is_active) === 1);
+    const availableUsers = allUsers.filter(user => parseInt(user.is_active, 10) === 1);
     
     if (availableUsers.length === 0) {
         showError('No active users available. Create users first.');
@@ -692,11 +708,10 @@ function updatePermission(shareId, userId, permissionLevel, callback) {
     formData.append('user_id', userId);
     formData.append('permission_level', permissionLevel);
 
-    fetch('/api/share-control.php', {
+    apiFetch('/api/share-control.php', 'set_permission', {
         method: 'POST',
         body: formData
     })
-        .then(response => response.json())
         .then(data => {
             if (data.success) {
                 showSuccess(data.message);
@@ -707,7 +722,7 @@ function updatePermission(shareId, userId, permissionLevel, callback) {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to update permission');
+            showError('Failed to update permission: ' + (error.message || 'Unknown error'));
         });
 }
 
@@ -719,11 +734,10 @@ function removePermission(shareId, userId) {
     formData.append('share_id', shareId);
     formData.append('user_id', userId);
 
-    fetch('/api/share-control.php', {
+    apiFetch('/api/share-control.php', 'remove_permission', {
         method: 'POST',
         body: formData
     })
-        .then(response => response.json())
         .then(data => {
             if (data.success) {
                 showSuccess(data.message);
@@ -734,13 +748,12 @@ function removePermission(shareId, userId) {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to remove permission');
+            showError('Failed to remove permission: ' + (error.message || 'Unknown error'));
         });
 }
 
 function viewUserPermissions(userId, username) {
-    fetch(`/api/share-control.php?action=get_user_permissions&user_id=${userId}`)
-        .then(response => response.json())
+    apiFetch(`/api/share-control.php?action=get_user_permissions&user_id=${userId}`, 'get_user_permissions')
         .then(data => {
             if (data.success) {
                 document.getElementById('permissionsModalTitle').textContent = `Permissions for ${username}`;
@@ -752,7 +765,7 @@ function viewUserPermissions(userId, username) {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to load permissions');
+            showError('Failed to load permissions: ' + (error.message || 'Unknown error'));
         });
 }
 
@@ -791,8 +804,7 @@ function loadUsersForPermissions() {
 }
 
 function loadSharePermissionsForEdit(shareId) {
-    fetch(`/api/share-control.php?action=get_permissions&share_id=${shareId}`)
-        .then(response => response.json())
+    apiFetch(`/api/share-control.php?action=get_permissions&share_id=${shareId}`, 'get_permissions_for_edit')
         .then(data => {
             if (data.success) {
                 // Permissions are managed via separate modal
@@ -815,8 +827,7 @@ function saveAllPermissions(shareId) {
 // ============ System Operations ============
 
 function loadSambaStatus() {
-    fetch('/api/share-control.php?action=status')
-        .then(response => response.json())
+    apiFetch('/api/share-control.php?action=status', 'status')
         .then(data => {
             if (data.success) {
                 const statusEl = document.getElementById('samba-status');
@@ -840,8 +851,7 @@ function loadSambaStatus() {
 }
 
 function testSambaConfig() {
-    fetch('/api/share-control.php?action=test_config')
-        .then(response => response.json())
+    apiFetch('/api/share-control.php?action=test_config', 'test_config')
         .then(data => {
             if (data.success) {
                 showSuccess('Samba configuration is valid!');
@@ -851,13 +861,12 @@ function testSambaConfig() {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to test configuration');
+            showError('Failed to test configuration: ' + (error.message || 'Unknown error'));
         });
 }
 
 function loadConnectedClients() {
-    fetch('/api/share-control.php?action=connected_clients')
-        .then(response => response.json())
+    apiFetch('/api/share-control.php?action=connected_clients', 'connected_clients')
         .then(data => {
             if (data.success) {
                 if (data.clients.length === 0) {
@@ -875,13 +884,12 @@ function loadConnectedClients() {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to get connected clients');
+            showError('Failed to get connected clients: ' + (error.message || 'Unknown error'));
         });
 }
 
 function browseDirectories() {
-    fetch('/api/share-control.php?action=list_directories')
-        .then(response => response.json())
+    apiFetch('/api/share-control.php?action=list_directories', 'list_directories')
         .then(data => {
             if (data.success) {
                 const dirs = data.directories;
@@ -919,8 +927,7 @@ function selectDirectory(path) {
 }
 
 function loadLogs() {
-    fetch('/api/share-control.php?action=get_logs&limit=50')
-        .then(response => response.json())
+    apiFetch('/api/share-control.php?action=get_logs&limit=50', 'get_logs')
         .then(data => {
             if (data.success) {
                 displayLogs(data.logs);
@@ -930,7 +937,7 @@ function loadLogs() {
         })
         .catch(error => {
             console.error('Error:', error);
-            showError('Failed to load logs');
+            showError('Failed to load logs: ' + (error.message || 'Unknown error'));
         });
 }
 
@@ -997,4 +1004,3 @@ function showError(message) {
 function showInfo(message) {
     alert('ℹ ' + message);
 }
-
