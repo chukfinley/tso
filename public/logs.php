@@ -178,19 +178,26 @@ $recentErrors = $db->fetchAll(
                                 <th style="width: 150px;">Time</th>
                                 <th style="width: 120px;">User</th>
                                 <th style="width: 150px;">IP Address</th>
-                                <th>Message</th>
-                                <th style="width: 100px;">Actions</th>
+                                <th>Full Log Details</th>
                             </tr>
                         </thead>
                         <tbody id="logs-table-body">
-                            <?php foreach ($logs as $log): ?>
-                                <tr data-log-id="<?php echo $log['id']; ?>">
+                            <?php foreach ($logs as $log): 
+                                $context = [];
+                                if (!empty($log['context'])) {
+                                    $context = json_decode($log['context'], true) ?: [];
+                                }
+                                $rawEntry = $context['entry'] ?? '';
+                                $source = $context['source'] ?? '';
+                                $logType = $context['type'] ?? '';
+                            ?>
+                                <tr data-log-id="<?php echo $log['id']; ?>" class="log-row">
                                     <td>
                                         <span class="log-badge log-badge-<?php echo htmlspecialchars($log['level']); ?>">
                                             <?php echo strtoupper($log['level']); ?>
                                         </span>
                                     </td>
-                                    <td style="font-size: 12px; color: #b0b0b0;">
+                                    <td style="font-size: 12px; color: #b0b0b0; white-space: nowrap;">
                                         <?php echo date('Y-m-d H:i:s', strtotime($log['created_at'])); ?>
                                     </td>
                                     <td>
@@ -200,19 +207,43 @@ $recentErrors = $db->fetchAll(
                                         <?php echo htmlspecialchars($log['ip_address'] ?? 'N/A'); ?>
                                     </td>
                                     <td>
-                                        <div style="max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                            <?php echo htmlspecialchars($log['message']); ?>
+                                        <div class="log-details-full">
+                                            <div class="log-message" style="margin-bottom: 10px;">
+                                                <strong style="color: #fff;">Message:</strong>
+                                                <div style="color: #b0b0b0; margin-top: 5px; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 13px;">
+                                                    <?php echo htmlspecialchars($log['message']); ?>
+                                                </div>
+                                            </div>
+                                            <?php if (!empty($rawEntry)): ?>
+                                            <div class="log-entry" style="margin-bottom: 10px; padding: 10px; background: rgba(255, 140, 0, 0.05); border-left: 3px solid #ff8c00; border-radius: 4px;">
+                                                <strong style="color: #ff8c00;">Raw Log Entry:</strong>
+                                                <div style="color: #fff; margin-top: 5px; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 12px; line-height: 1.6;">
+                                                    <?php echo htmlspecialchars($rawEntry); ?>
+                                                </div>
+                                            </div>
+                                            <?php endif; ?>
+                                            <?php if (!empty($source) || !empty($logType)): ?>
+                                            <div class="log-meta" style="margin-bottom: 10px; font-size: 12px; color: #888;">
+                                                <?php if (!empty($source)): ?>
+                                                    <span style="margin-right: 15px;"><strong>Source:</strong> <?php echo htmlspecialchars($source); ?></span>
+                                                <?php endif; ?>
+                                                <?php if (!empty($logType)): ?>
+                                                    <span><strong>Type:</strong> <?php echo htmlspecialchars($logType); ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                            <?php endif; ?>
+                                            <?php if (!empty($context) && count($context) > 0): ?>
+                                            <div class="log-context">
+                                                <button class="btn-toggle-context" data-log-id="<?php echo $log['id']; ?>" 
+                                                        style="background: none; border: 1px solid #444; color: #ff8c00; cursor: pointer; font-size: 11px; padding: 5px 10px; border-radius: 4px; margin-top: 5px;">
+                                                    <span class="toggle-text">Show Full Context</span>
+                                                </button>
+                                                <div class="context-details" id="context-<?php echo $log['id']; ?>" style="display: none; margin-top: 10px; padding: 10px; background: #0a0a0a; border-radius: 4px; border: 1px solid #333;">
+                                                    <pre style="color: #fff; font-size: 11px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; margin: 0;"><?php echo htmlspecialchars(json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); ?></pre>
+                                                </div>
+                                            </div>
+                                            <?php endif; ?>
                                         </div>
-                                    </td>
-                                    <td>
-                                        <?php if (!empty($log['context'])): ?>
-                                            <button class="btn-view-context" data-context='<?php echo htmlspecialchars($log['context'], ENT_QUOTES); ?>' 
-                                                    style="background: none; border: none; color: #ff8c00; cursor: pointer; font-size: 12px; padding: 5px 10px;">
-                                                View Context
-                                            </button>
-                                        <?php else: ?>
-                                            <span style="color: #666;">-</span>
-                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -241,17 +272,6 @@ $recentErrors = $db->fetchAll(
                 <?php endif; ?>
             <?php endif; ?>
         </div>
-    </div>
-</div>
-
-<!-- Context Modal -->
-<div id="context-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 2000; align-items: center; justify-content: center;">
-    <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 30px; max-width: 800px; max-height: 80vh; overflow: auto; width: 90%;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 style="color: #fff; margin: 0;">Log Context</h2>
-            <button id="close-context-modal" style="background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">&times;</button>
-        </div>
-        <pre id="context-content" style="background: #0a0a0a; padding: 20px; border-radius: 4px; overflow: auto; color: #fff; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word;"></pre>
     </div>
 </div>
 
@@ -294,8 +314,19 @@ $recentErrors = $db->fetchAll(
     background: rgba(255, 140, 0, 0.05);
 }
 
-.btn-view-context:hover {
-    text-decoration: underline;
+.log-row td {
+    padding: 15px !important;
+    vertical-align: top;
+}
+
+.log-details-full {
+    min-width: 500px;
+    max-width: 100%;
+}
+
+.btn-toggle-context:hover {
+    background: rgba(255, 140, 0, 0.1) !important;
+    border-color: #ff8c00 !important;
 }
 </style>
 
@@ -331,35 +362,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Context modal
-    const contextModal = document.getElementById('context-modal');
-    const contextContent = document.getElementById('context-content');
-    const closeContextModal = document.getElementById('close-context-modal');
-    const viewContextButtons = document.querySelectorAll('.btn-view-context');
-
-    viewContextButtons.forEach(button => {
+    // Toggle context details
+    const toggleButtons = document.querySelectorAll('.btn-toggle-context');
+    toggleButtons.forEach(button => {
         button.addEventListener('click', function() {
-            const contextData = this.getAttribute('data-context');
-            try {
-                const parsed = JSON.parse(contextData);
-                contextContent.textContent = JSON.stringify(parsed, null, 2);
-            } catch (e) {
-                contextContent.textContent = contextData;
+            const logId = this.getAttribute('data-log-id');
+            const contextDiv = document.getElementById('context-' + logId);
+            const toggleText = this.querySelector('.toggle-text');
+            
+            if (contextDiv) {
+                if (contextDiv.style.display === 'none') {
+                    contextDiv.style.display = 'block';
+                    toggleText.textContent = 'Hide Full Context';
+                } else {
+                    contextDiv.style.display = 'none';
+                    toggleText.textContent = 'Show Full Context';
+                }
             }
-            contextModal.style.display = 'flex';
         });
-    });
-
-    if (closeContextModal) {
-        closeContextModal.addEventListener('click', function() {
-            contextModal.style.display = 'none';
-        });
-    }
-
-    contextModal.addEventListener('click', function(e) {
-        if (e.target === contextModal) {
-            contextModal.style.display = 'none';
-        }
     });
 
     // Auto-refresh every 30 seconds
