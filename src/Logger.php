@@ -232,6 +232,78 @@ class Logger {
         return true;
     }
 
+    /**
+     * Log a command execution
+     */
+    public function logCommand($command, $output = null, $returnCode = 0, $userId = null) {
+        $context = [
+            'type' => 'command_execution',
+            'command' => substr($command, 0, 500),
+            'return_code' => $returnCode,
+        ];
+        
+        if ($output !== null) {
+            $context['output_length'] = strlen($output);
+            // Only include output for errors
+            if ($returnCode !== 0) {
+                $context['output'] = substr($output, 0, 1000);
+            }
+        }
+        
+        $level = ($returnCode === 0) ? 'info' : 'warning';
+        $message = "Command executed: " . substr($command, 0, 200);
+        
+        return $this->log($level, $message, $context, $userId);
+    }
+
+    /**
+     * Log a service state change
+     */
+    public function logService($service, $action, $status = null, $userId = null) {
+        $context = [
+            'type' => 'service_action',
+            'service' => $service,
+            'action' => $action,
+        ];
+        
+        if ($status !== null) {
+            $context['status'] = $status;
+        }
+        
+        $message = "Service $action: $service";
+        
+        return $this->log('info', $message, $context, $userId);
+    }
+
+    /**
+     * Log a page access
+     */
+    public function logPageAccess($page, $method = 'GET', $userId = null) {
+        $context = [
+            'type' => 'page_access',
+            'page' => $page,
+            'method' => $method,
+        ];
+        
+        $message = "Page accessed: $method $page";
+        
+        return $this->log('debug', $message, $context, $userId);
+    }
+
+    /**
+     * Log a system update
+     */
+    public function logUpdate($updateType, $details = [], $userId = null) {
+        $context = array_merge([
+            'type' => 'system_update',
+            'update_type' => $updateType,
+        ], $details);
+        
+        $message = "System update: $updateType";
+        
+        return $this->log('info', $message, $context, $userId);
+    }
+
     // Prevent cloning
     private function __clone() {}
 

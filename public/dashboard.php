@@ -170,6 +170,34 @@ $motherboard = getMotherboardInfo();
         </div>
     </div>
 
+    <?php if (isset($currentUser['role']) && $currentUser['role'] === 'admin'): ?>
+    <!-- System Control Card -->
+    <div class="card" style="margin-bottom: 30px;">
+        <div class="card-header">
+            <span class="monitor-icon">⚡</span> System Control
+        </div>
+        <div class="card-body">
+            <p style="color: #888; margin-bottom: 20px; font-size: 14px;">
+                Warning: These actions will affect the entire system. Use with caution.
+            </p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                <button class="btn btn-secondary" onclick="handleSystemAction('reboot')" style="background: #ff9800; color: #fff;">
+                    🔄 Reboot
+                </button>
+                <button class="btn btn-danger" onclick="handleSystemAction('shutdown')" style="background: #f44336; color: #fff;">
+                    ⏻ Shutdown
+                </button>
+                <button class="btn btn-secondary" onclick="handleSystemAction('sleep')" style="background: #2196f3; color: #fff;">
+                    😴 Suspend
+                </button>
+                <button class="btn btn-secondary" onclick="handleSystemAction('hibernate')" style="background: #9c27b0; color: #fff;">
+                    💤 Hibernate
+                </button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <!-- System Monitoring Grid -->
     <div class="system-monitoring-grid">
         <!-- CPU Card -->
@@ -761,6 +789,142 @@ window.addEventListener('beforeunload', function() {
         clearInterval(refreshInterval);
     }
 });
+
+// System Control Functions
+function handleSystemAction(action) {
+    // Define action names and confirmation messages
+    const actionNames = {
+        'reboot': 'reboot',
+        'shutdown': 'shutdown',
+        'sleep': 'suspend',
+        'hibernate': 'hibernate',
+        'suspend': 'suspend'
+    };
+    
+    const actionName = actionNames[action] || action;
+    const actionDisplayName = actionName.charAt(0).toUpperCase() + actionName.slice(1);
+    
+    // Confirmation messages
+    const confirmMessages = {
+        'reboot': 'Are you sure you want to reboot the system? This will restart the server immediately.',
+        'shutdown': 'Are you sure you want to shutdown the system? This will turn off the server immediately.',
+        'sleep': 'Are you sure you want to suspend the system? The server will go to sleep mode.',
+        'hibernate': 'Are you sure you want to hibernate the system? The server will save state and power off.',
+        'suspend': 'Are you sure you want to suspend the system? The server will go to sleep mode.'
+    };
+    
+    const confirmMessage = confirmMessages[action] || `Are you sure you want to ${actionName} the system?`;
+    
+    // Show confirmation dialog
+    if (!confirm(confirmMessage + '\n\nClick OK to proceed or Cancel to abort.')) {
+        return; // User cancelled
+    }
+    
+    // Show second confirmation for critical actions (reboot and shutdown)
+    if (action === 'reboot' || action === 'shutdown') {
+        const secondConfirmMessage = action === 'reboot' 
+            ? 'FINAL WARNING: This will reboot the system NOW. Are you absolutely sure?'
+            : 'FINAL WARNING: This will shutdown the system NOW. Are you absolutely sure?';
+        
+        if (!confirm(secondConfirmMessage + '\n\nClick OK to proceed or Cancel to abort.')) {
+            return; // User cancelled
+        }
+    }
+    
+    // Disable buttons during execution
+    const buttons = document.querySelectorAll('[onclick*="handleSystemAction"]');
+    buttons.forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'not-allowed';
+    });
+    
+    // Show loading indicator
+    const loadingMsg = document.createElement('div');
+    loadingMsg.id = 'system-control-loading';
+    loadingMsg.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(26, 26, 26, 0.95); border: 2px solid #ff8c00; border-radius: 8px; padding: 20px 30px; z-index: 10000; text-align: center;';
+    loadingMsg.innerHTML = `
+        <div style="font-size: 16px; color: #fff; margin-bottom: 10px;">Executing ${actionDisplayName}...</div>
+        <div style="font-size: 12px; color: #888;">Please wait...</div>
+    `;
+    document.body.appendChild(loadingMsg);
+    
+    // Make API call
+    fetch('/api/system-control.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            action: action
+        })
+    })
+    .then(response => {
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            loadingMsg.innerHTML = `
+                <div style="font-size: 16px; color: #4caf50; margin-bottom: 10px;">✓ ${data.message}</div>
+                <div style="font-size: 12px; color: #888;">${data.note || ''}</div>
+            `;
+            
+            // For reboot/shutdown, show a longer message
+            if (action === 'reboot' || action === 'shutdown') {
+                setTimeout(() => {
+                    loadingMsg.innerHTML = `
+                        <div style="font-size: 16px; color: #fff; margin-bottom: 10px;">System ${actionName} in progress...</div>
+                        <div style="font-size: 12px; color: #888;">This page will become unavailable shortly.</div>
+                    `;
+                }, 2000);
+            }
+        } else {
+            // Show error message
+            loadingMsg.innerHTML = `
+                <div style="font-size: 16px; color: #f44336; margin-bottom: 10px;">✗ Error</div>
+                <div style="font-size: 12px; color: #888;">${data.error || 'Unknown error occurred'}</div>
+            `;
+            
+            // Re-enable buttons on error
+            buttons.forEach(btn => {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            });
+            
+            // Remove loading message after 5 seconds
+            setTimeout(() => {
+                if (loadingMsg.parentNode) {
+                    loadingMsg.parentNode.removeChild(loadingMsg);
+                }
+            }, 5000);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        
+        // Show error message
+        loadingMsg.innerHTML = `
+            <div style="font-size: 16px; color: #f44336; margin-bottom: 10px;">✗ Network Error</div>
+            <div style="font-size: 12px; color: #888;">Failed to communicate with server: ${error.message}</div>
+        `;
+        
+        // Re-enable buttons on error
+        buttons.forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+        });
+        
+        // Remove loading message after 5 seconds
+        setTimeout(() => {
+            if (loadingMsg.parentNode) {
+                loadingMsg.parentNode.removeChild(loadingMsg);
+            }
+        }, 5000);
+    });
+}
 </script>
 
 <?php include VIEWS_PATH . '/layout/footer.php'; ?>

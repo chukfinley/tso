@@ -543,6 +543,41 @@ EOF
         "a2enmod ssl 2>&1" \
         "Enable Apache SSL module"
 
+    # Ensure Apache listens on port 443 for HTTPS
+    print_info "Configuring Apache to listen on port 443..."
+    PORTS_CONF="/etc/apache2/ports.conf"
+    
+    # Check if ports.conf exists, create it if not
+    if [ ! -f ${PORTS_CONF} ]; then
+        cat > ${PORTS_CONF} << EOF
+Listen 80
+
+<IfModule ssl_module>
+    Listen 443
+</IfModule>
+EOF
+        print_success "Created ports.conf with SSL configuration"
+    else
+        # Check if Listen 443 is already configured
+        if grep -q "Listen 443" ${PORTS_CONF} 2>/dev/null; then
+            print_success "Apache already configured to listen on port 443"
+        else
+            # Check if SSL module block exists
+            if grep -q "<IfModule ssl_module>" ${PORTS_CONF} 2>/dev/null; then
+                # SSL module block exists, add Listen 443 inside it
+                sed -i '/<IfModule ssl_module>/a\    Listen 443' ${PORTS_CONF}
+                print_success "Added Listen 443 inside SSL module block"
+            else
+                # No SSL module block, add it at the end of file
+                echo "" >> ${PORTS_CONF}
+                echo "<IfModule ssl_module>" >> ${PORTS_CONF}
+                echo "    Listen 443" >> ${PORTS_CONF}
+                echo "</IfModule>" >> ${PORTS_CONF}
+                print_success "Added SSL module block with Listen 443"
+            fi
+        fi
+    fi
+
     PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo "")
     if [[ -n "$PHP_VERSION" ]]; then
         run_command \
@@ -936,6 +971,13 @@ perform_update() {
         print_info "Updating monitoring system..."
         bash "${INSTALL_DIR}/scripts/install-monitoring.sh"
     fi
+    
+    # Install/Update logging service
+    if [ -f "${INSTALL_DIR}/scripts/install-logging-service.sh" ]; then
+        echo ""
+        print_info "Updating background logging service..."
+        bash "${INSTALL_DIR}/scripts/install-logging-service.sh"
+    fi
 
     # Ensure admin user exists with correct password
     create_admin_user
@@ -1038,6 +1080,13 @@ main() {
             echo ""
             echo "Installing monitoring system..."
             bash "$SCRIPT_DIR/scripts/install-monitoring.sh"
+        fi
+        
+        # Install logging service
+        if [ -f "$SCRIPT_DIR/scripts/install-logging-service.sh" ]; then
+            echo ""
+            print_info "Installing background logging service..."
+            bash "$SCRIPT_DIR/scripts/install-logging-service.sh"
         fi
 
         # Show completion info

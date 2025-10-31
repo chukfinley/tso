@@ -96,6 +96,14 @@ if ($action === 'exec') {
     foreach ($blockedPatterns as $pattern) {
         if (preg_match($pattern, $command)) {
             // Log blocked command attempt
+            require_once SRC_PATH . '/Logger.php';
+            $logger = Logger::getInstance();
+            $logger->warning("Blocked command attempt", [
+                'type' => 'command_blocked',
+                'command' => substr($command, 0, 500),
+                'user' => $currentUser['username']
+            ], $currentUser['id']);
+            
             $db = Database::getInstance();
             $db->query(
                 "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)",
@@ -115,6 +123,10 @@ if ($action === 'exec') {
         }
     }
 
+    // Initialize logger
+    require_once SRC_PATH . '/Logger.php';
+    $logger = Logger::getInstance();
+    
     // Log command execution
     $db = Database::getInstance();
     $db->query(
@@ -140,6 +152,9 @@ if ($action === 'exec') {
     exec($fullCommand, $outputLines, $returnCode);
 
     $output = implode("\n", $outputLines);
+    
+    // Log command execution with Logger
+    $logger->logCommand($fullCommand, $output, $returnCode, $currentUser['id']);
 
     // Handle timeout
     if ($returnCode === 124) {
