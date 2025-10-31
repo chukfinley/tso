@@ -293,16 +293,69 @@ try {
 } catch (Exception $e) {
     // Clear output buffer on error
     $output = ob_get_clean();
+    
+    // Log detailed error
+    try {
+        if ($logger === null) {
+            require_once __DIR__ . '/../../config/config.php';
+            require_once SRC_PATH . '/Logger.php';
+            $logger = Logger::getInstance();
+        }
+        $action = $_GET['action'] ?? $_POST['action'] ?? 'unknown';
+        $context = [
+            'type' => 'api_error',
+            'exception_type' => 'Exception',
+            'action' => $action,
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString(),
+            'request_uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
+            'request_method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown',
+            'output_buffer' => $output ? substr($output, 0, 500) : null
+        ];
+        $logger->error('Share API Exception: ' . $e->getMessage(), $context);
+    } catch (Exception $logError) {
+        // If logging fails, try basic logging
+        error_log("Failed to log exception: " . $logError->getMessage());
+    }
+    
     http_response_code(400);
     echo json_encode([
         'success' => false,
         'error' => $e->getMessage(),
         'file' => $e->getFile(),
-        'line' => $e->getLine()
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString()
     ]);
 } catch (Error $e) {
     // Catch fatal errors (PHP 7+)
     $output = ob_get_clean();
+    
+    // Log detailed error
+    try {
+        if ($logger === null) {
+            require_once __DIR__ . '/../../config/config.php';
+            require_once SRC_PATH . '/Logger.php';
+            $logger = Logger::getInstance();
+        }
+        $action = $_GET['action'] ?? $_POST['action'] ?? 'unknown';
+        $context = [
+            'type' => 'api_error',
+            'exception_type' => 'Error',
+            'action' => $action,
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString(),
+            'request_uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
+            'request_method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown',
+            'output_buffer' => $output ? substr($output, 0, 500) : null
+        ];
+        $logger->error('Share API Fatal Error: ' . $e->getMessage(), $context);
+    } catch (Exception $logError) {
+        // If logging fails, try basic logging
+        error_log("Failed to log error: " . $logError->getMessage());
+    }
+    
     http_response_code(500);
     echo json_encode([
         'success' => false,
@@ -314,17 +367,65 @@ try {
 } catch (Throwable $e) {
     // Catch any other throwable (PHP 7+)
     $output = ob_get_clean();
+    
+    // Log detailed error
+    try {
+        if ($logger === null) {
+            require_once __DIR__ . '/../../config/config.php';
+            require_once SRC_PATH . '/Logger.php';
+            $logger = Logger::getInstance();
+        }
+        $action = $_GET['action'] ?? $_POST['action'] ?? 'unknown';
+        $context = [
+            'type' => 'api_error',
+            'exception_type' => 'Throwable',
+            'action' => $action,
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString(),
+            'request_uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
+            'request_method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown',
+            'output_buffer' => $output ? substr($output, 0, 500) : null
+        ];
+        $logger->error('Share API Throwable Error: ' . $e->getMessage(), $context);
+    } catch (Exception $logError) {
+        // If logging fails, try basic logging
+        error_log("Failed to log throwable: " . $logError->getMessage());
+    }
+    
     http_response_code(500);
     echo json_encode([
         'success' => false,
         'error' => 'Unexpected error: ' . $e->getMessage(),
         'file' => $e->getFile(),
-        'line' => $e->getLine()
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString()
     ]);
 }
 
 // Catch any errors that happen after ob_end_clean() is called
 if (!headers_sent() && http_response_code() === false) {
+    // Try to log this error too
+    try {
+        if ($logger === null) {
+            require_once __DIR__ . '/../../config/config.php';
+            require_once SRC_PATH . '/Logger.php';
+            $logger = Logger::getInstance();
+        }
+        $action = $_GET['action'] ?? $_POST['action'] ?? 'unknown';
+        $context = [
+            'type' => 'api_error',
+            'exception_type' => 'FatalError',
+            'action' => $action,
+            'request_uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
+            'request_method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown',
+            'message' => 'Fatal error occurred before error handling'
+        ];
+        $logger->error('Share API Fatal Error: Fatal error occurred before error handling', $context);
+    } catch (Exception $logError) {
+        error_log("Failed to log fatal error: " . $logError->getMessage());
+    }
+    
     http_response_code(500);
     echo json_encode([
         'success' => false,
