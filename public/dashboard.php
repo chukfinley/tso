@@ -413,21 +413,38 @@ document.addEventListener('visibilitychange', function() {
 
 function updateSystemStats() {
     fetch('/api/system-stats.php')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok: ' + response.status);
+            }
+            return response.json();
+        })
         .then(data => {
+            console.log('Received data:', data); // Debug log
+            
+            if (data.error) {
+                console.error('API Error:', data.error);
+                return;
+            }
+            
             if (data.cpu) {
+                console.log('Updating CPU:', data.cpu);
                 updateCpuStats(data.cpu);
             }
             if (data.memory) {
+                console.log('Updating Memory:', data.memory);
                 updateMemoryStats(data.memory);
             }
             if (data.swap) {
+                console.log('Updating Swap:', data.swap);
                 updateSwapStats(data.swap);
             }
             if (data.uptime) {
+                console.log('Updating Uptime:', data.uptime);
                 updateUptime(data.uptime);
             }
             if (data.network) {
+                console.log('Updating Network:', data.network.length, 'interfaces');
                 updateNetworkInterfaces(data.network);
             }
 
@@ -440,170 +457,248 @@ function updateSystemStats() {
         })
         .catch(error => {
             console.error('Error fetching system stats:', error);
-            document.getElementById('refresh-indicator').style.background = '#f44336';
+            const indicator = document.getElementById('refresh-indicator');
+            if (indicator) {
+                indicator.style.background = '#f44336';
+            }
         });
 }
 
 function updateCpuStats(cpu) {
-    // Update CPU usage
-    const cpuUsageBar = document.getElementById('cpu-usage-bar');
-    const cpuUsageText = document.getElementById('cpu-usage-text');
+    try {
+        console.log('updateCpuStats called with:', cpu);
+        
+        // Update CPU usage
+        const cpuUsageBar = document.getElementById('cpu-usage-bar');
+        const cpuUsageText = document.getElementById('cpu-usage-text');
 
-    if (cpuUsageBar && cpuUsageText) {
-        cpuUsageBar.style.width = cpu.usage + '%';
-        cpuUsageText.textContent = cpu.usage + '%';
+        if (cpuUsageBar && cpuUsageText && cpu.usage !== undefined) {
+            cpuUsageBar.style.width = cpu.usage + '%';
+            cpuUsageText.textContent = cpu.usage + '%';
 
-        // Update color based on usage
-        cpuUsageBar.className = 'progress-bar';
-        if (cpu.usage > 80) {
-            cpuUsageBar.classList.add('danger');
-        } else if (cpu.usage > 60) {
-            cpuUsageBar.classList.add('warning');
+            // Update color based on usage
+            cpuUsageBar.className = 'progress-bar';
+            if (cpu.usage > 80) {
+                cpuUsageBar.classList.add('danger');
+            } else if (cpu.usage > 60) {
+                cpuUsageBar.classList.add('warning');
+            }
+
+            // Add update animation
+            cpuUsageText.classList.add('updating');
+            setTimeout(() => cpuUsageText.classList.remove('updating'), 300);
+        } else {
+            console.warn('CPU usage elements not found or data missing', {
+                cpuUsageBar: !!cpuUsageBar,
+                cpuUsageText: !!cpuUsageText,
+                cpuUsage: cpu.usage
+            });
         }
 
-        // Add update animation
-        cpuUsageText.classList.add('updating');
-        setTimeout(() => cpuUsageText.classList.remove('updating'), 300);
-    }
-
-    // Update load average
-    const cpuLoad = document.getElementById('cpu-load');
-    if (cpuLoad) {
-        cpuLoad.textContent = `${cpu.load_avg['1min']} / ${cpu.load_avg['5min']} / ${cpu.load_avg['15min']}`;
-        cpuLoad.classList.add('updating');
-        setTimeout(() => cpuLoad.classList.remove('updating'), 300);
+        // Update load average
+        const cpuLoad = document.getElementById('cpu-load');
+        if (cpuLoad && cpu.load_avg) {
+            cpuLoad.textContent = `${cpu.load_avg['1min']} / ${cpu.load_avg['5min']} / ${cpu.load_avg['15min']}`;
+            cpuLoad.classList.add('updating');
+            setTimeout(() => cpuLoad.classList.remove('updating'), 300);
+        } else {
+            console.warn('CPU load element not found or data missing', {
+                cpuLoad: !!cpuLoad,
+                loadAvg: cpu.load_avg
+            });
+        }
+    } catch (error) {
+        console.error('Error in updateCpuStats:', error);
     }
 }
 
 function updateMemoryStats(memory) {
-    // Update memory usage
-    const memUsageBar = document.getElementById('mem-usage-bar');
-    const memUsageText = document.getElementById('mem-usage-text');
-    const memUsage = document.getElementById('mem-usage');
+    try {
+        console.log('updateMemoryStats called with:', memory);
+        
+        // Update memory usage
+        const memUsageBar = document.getElementById('mem-usage-bar');
+        const memUsageText = document.getElementById('mem-usage-text');
+        const memUsage = document.getElementById('mem-usage');
 
-    if (memUsageBar && memUsageText) {
-        memUsageBar.style.width = memory.usage_percent + '%';
-        memUsageText.textContent = memory.usage_percent + '%';
+        if (memUsageBar && memUsageText && memory.usage_percent !== undefined) {
+            memUsageBar.style.width = memory.usage_percent + '%';
+            memUsageText.textContent = memory.usage_percent + '%';
 
-        // Update color based on usage
-        memUsageBar.className = 'progress-bar';
-        if (memory.usage_percent > 85) {
-            memUsageBar.classList.add('danger');
-        } else if (memory.usage_percent > 70) {
-            memUsageBar.classList.add('warning');
+            // Update color based on usage
+            memUsageBar.className = 'progress-bar';
+            if (memory.usage_percent > 85) {
+                memUsageBar.classList.add('danger');
+            } else if (memory.usage_percent > 70) {
+                memUsageBar.classList.add('warning');
+            }
+
+            memUsageText.classList.add('updating');
+            setTimeout(() => memUsageText.classList.remove('updating'), 300);
+        } else {
+            console.warn('Memory usage elements not found or data missing', {
+                memUsageBar: !!memUsageBar,
+                memUsageText: !!memUsageText,
+                usagePercent: memory.usage_percent
+            });
         }
 
-        memUsageText.classList.add('updating');
-        setTimeout(() => memUsageText.classList.remove('updating'), 300);
-    }
-
-    if (memUsage) {
-        memUsage.textContent = `${memory.used_formatted} / ${memory.available_formatted}`;
-        memUsage.classList.add('updating');
-        setTimeout(() => memUsage.classList.remove('updating'), 300);
+        if (memUsage && memory.used_formatted && memory.available_formatted) {
+            memUsage.textContent = `${memory.used_formatted} / ${memory.available_formatted}`;
+            memUsage.classList.add('updating');
+            setTimeout(() => memUsage.classList.remove('updating'), 300);
+        } else {
+            console.warn('Memory usage text element not found or data missing', {
+                memUsage: !!memUsage,
+                used: memory.used_formatted,
+                available: memory.available_formatted
+            });
+        }
+    } catch (error) {
+        console.error('Error in updateMemoryStats:', error);
     }
 }
 
 function updateSwapStats(swap) {
-    // Update swap usage
-    const swapUsageBar = document.getElementById('swap-usage-bar');
-    const swapUsageText = document.getElementById('swap-usage-text');
-    const swapUsage = document.getElementById('swap-usage');
+    try {
+        console.log('updateSwapStats called with:', swap);
+        
+        // Update swap usage
+        const swapUsageBar = document.getElementById('swap-usage-bar');
+        const swapUsageText = document.getElementById('swap-usage-text');
+        const swapUsage = document.getElementById('swap-usage');
 
-    if (swapUsageBar && swapUsageText) {
-        swapUsageBar.style.width = swap.usage_percent + '%';
-        swapUsageText.textContent = swap.usage_percent + '%';
+        if (swapUsageBar && swapUsageText && swap.usage_percent !== undefined) {
+            swapUsageBar.style.width = swap.usage_percent + '%';
+            swapUsageText.textContent = swap.usage_percent + '%';
 
-        // Update color based on usage
-        swapUsageBar.className = 'progress-bar';
-        if (swap.usage_percent > 75) {
-            swapUsageBar.classList.add('danger');
-        } else if (swap.usage_percent > 50) {
-            swapUsageBar.classList.add('warning');
+            // Update color based on usage
+            swapUsageBar.className = 'progress-bar';
+            if (swap.usage_percent > 75) {
+                swapUsageBar.classList.add('danger');
+            } else if (swap.usage_percent > 50) {
+                swapUsageBar.classList.add('warning');
+            }
+
+            swapUsageText.classList.add('updating');
+            setTimeout(() => swapUsageText.classList.remove('updating'), 300);
+        } else {
+            console.warn('Swap usage elements not found or data missing', {
+                swapUsageBar: !!swapUsageBar,
+                swapUsageText: !!swapUsageText,
+                usagePercent: swap.usage_percent
+            });
         }
 
-        swapUsageText.classList.add('updating');
-        setTimeout(() => swapUsageText.classList.remove('updating'), 300);
-    }
-
-    if (swapUsage) {
-        swapUsage.textContent = `${swap.used_formatted} / ${swap.free_formatted}`;
-        swapUsage.classList.add('updating');
-        setTimeout(() => swapUsage.classList.remove('updating'), 300);
+        if (swapUsage && swap.used_formatted && swap.free_formatted) {
+            swapUsage.textContent = `${swap.used_formatted} / ${swap.free_formatted}`;
+            swapUsage.classList.add('updating');
+            setTimeout(() => swapUsage.classList.remove('updating'), 300);
+        } else {
+            console.warn('Swap usage text element not found or data missing', {
+                swapUsage: !!swapUsage,
+                used: swap.used_formatted,
+                free: swap.free_formatted
+            });
+        }
+    } catch (error) {
+        console.error('Error in updateSwapStats:', error);
     }
 }
 
 function updateUptime(uptime) {
-    const uptimeEl = document.getElementById('system-uptime');
-    if (uptimeEl) {
-        uptimeEl.textContent = uptime.formatted;
-        uptimeEl.classList.add('updating');
-        setTimeout(() => uptimeEl.classList.remove('updating'), 300);
-    }
+    try {
+        console.log('updateUptime called with:', uptime);
+        
+        const uptimeEl = document.getElementById('system-uptime');
+        if (uptimeEl && uptime.formatted) {
+            uptimeEl.textContent = uptime.formatted;
+            uptimeEl.classList.add('updating');
+            setTimeout(() => uptimeEl.classList.remove('updating'), 300);
+        } else {
+            console.warn('Uptime element not found or data missing', {
+                uptimeEl: !!uptimeEl,
+                formatted: uptime.formatted
+            });
+        }
 
-    // Update system time
-    const timeEl = document.getElementById('system-time');
-    if (timeEl) {
-        const now = new Date();
-        const formattedTime = now.getFullYear() + '-' +
-            String(now.getMonth() + 1).padStart(2, '0') + '-' +
-            String(now.getDate()).padStart(2, '0') + ' ' +
-            String(now.getHours()).padStart(2, '0') + ':' +
-            String(now.getMinutes()).padStart(2, '0') + ':' +
-            String(now.getSeconds()).padStart(2, '0');
-        timeEl.textContent = formattedTime;
+        // Update system time
+        const timeEl = document.getElementById('system-time');
+        if (timeEl) {
+            const now = new Date();
+            const formattedTime = now.getFullYear() + '-' +
+                String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                String(now.getDate()).padStart(2, '0') + ' ' +
+                String(now.getHours()).padStart(2, '0') + ':' +
+                String(now.getMinutes()).padStart(2, '0') + ':' +
+                String(now.getSeconds()).padStart(2, '0');
+            timeEl.textContent = formattedTime;
+        } else {
+            console.warn('System time element not found');
+        }
+    } catch (error) {
+        console.error('Error in updateUptime:', error);
     }
 }
 
 function updateNetworkInterfaces(interfaces) {
-    const container = document.getElementById('network-interfaces');
-    if (!container) return;
+    try {
+        console.log('updateNetworkInterfaces called with:', interfaces);
+        
+        const container = document.getElementById('network-interfaces');
+        if (!container) {
+            console.warn('Network interfaces container not found');
+            return;
+        }
 
-    if (interfaces.length === 0) {
-        container.innerHTML = '<p style="color: #666; text-align: center;">No network interfaces found</p>';
-        return;
+        if (!interfaces || interfaces.length === 0) {
+            container.innerHTML = '<p style="color: #666; text-align: center;">No network interfaces found</p>';
+            return;
+        }
+
+        let html = '<div style="display: grid; gap: 15px;">';
+
+        interfaces.forEach(iface => {
+            const statusColor = iface.is_up ? '#4caf50' : '#f44336';
+            const statusIcon = iface.is_up ? '●' : '○';
+
+            html += `
+                <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-weight: 600; color: #ff8c00; font-size: 16px;">${iface.name || 'Unknown'}</span>
+                            <span style="color: ${statusColor}; font-size: 14px;">${statusIcon} ${iface.status || 'Unknown'}</span>
+                        </div>
+                        <span style="background: rgba(255, 140, 0, 0.2); color: #ff8c00; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;">${iface.type || 'Unknown'}</span>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 13px;">
+                        <div>
+                            <span style="color: #888;">IP Address:</span>
+                            <span style="color: #fff; margin-left: 8px;">${iface.ip || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span style="color: #888;">Speed:</span>
+                            <span style="color: #fff; margin-left: 8px;">${iface.speed || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span style="color: #888;">MAC:</span>
+                            <span style="color: #fff; margin-left: 8px; font-family: monospace; font-size: 12px;">${iface.mac || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span style="color: #888;">Traffic:</span>
+                            <span style="color: #4caf50; margin-left: 8px;">↓ ${iface.rx_formatted || '0 B'}</span>
+                            <span style="color: #f44336; margin-left: 8px;">↑ ${iface.tx_formatted || '0 B'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Error in updateNetworkInterfaces:', error);
     }
-
-    let html = '<div style="display: grid; gap: 15px;">';
-
-    interfaces.forEach(iface => {
-        const statusColor = iface.is_up ? '#4caf50' : '#f44336';
-        const statusIcon = iface.is_up ? '●' : '○';
-
-        html += `
-            <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 15px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-weight: 600; color: #ff8c00; font-size: 16px;">${iface.name}</span>
-                        <span style="color: ${statusColor}; font-size: 14px;">${statusIcon} ${iface.status}</span>
-                    </div>
-                    <span style="background: rgba(255, 140, 0, 0.2); color: #ff8c00; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;">${iface.type}</span>
-                </div>
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 13px;">
-                    <div>
-                        <span style="color: #888;">IP Address:</span>
-                        <span style="color: #fff; margin-left: 8px;">${iface.ip}</span>
-                    </div>
-                    <div>
-                        <span style="color: #888;">Speed:</span>
-                        <span style="color: #fff; margin-left: 8px;">${iface.speed}</span>
-                    </div>
-                    <div>
-                        <span style="color: #888;">MAC:</span>
-                        <span style="color: #fff; margin-left: 8px; font-family: monospace; font-size: 12px;">${iface.mac}</span>
-                    </div>
-                    <div>
-                        <span style="color: #888;">Traffic:</span>
-                        <span style="color: #4caf50; margin-left: 8px;">↓ ${iface.rx_formatted}</span>
-                        <span style="color: #f44336; margin-left: 8px;">↑ ${iface.tx_formatted}</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-
-    html += '</div>';
-    container.innerHTML = html;
 }
 
 function updateLastUpdateText() {
@@ -634,6 +729,8 @@ function flashRefreshIndicator() {
 }
 
 function startAutoRefresh() {
+    console.log('Starting auto-refresh - updates every 1 second');
+    
     // Update immediately
     updateSystemStats();
 
@@ -641,25 +738,21 @@ function startAutoRefresh() {
     refreshInterval = setInterval(() => {
         if (isPageVisible) {
             updateSystemStats();
+        } else {
+            console.log('Page not visible, skipping update');
         }
     }, 1000);
 
     // Update "last update" text more frequently
     setInterval(updateLastUpdateText, 1000);
+    
+    console.log('Auto-refresh started successfully');
 }
 
 // Start auto-refresh when page loads
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('Dashboard loaded, initializing auto-refresh...');
     startAutoRefresh();
-
-    // Load network interfaces initially
-    fetch('/api/system-stats.php')
-        .then(response => response.json())
-        .then(data => {
-            if (data.network) {
-                updateNetworkInterfaces(data.network);
-            }
-        });
 });
 
 // Clean up when page is being unloaded
