@@ -12,7 +12,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
         <li><a href="/vms.php" class="<?php echo $currentPage === 'vms' ? 'active' : ''; ?>">VMs</a></li>
         <li><a href="/plugins.php" class="<?php echo $currentPage === 'plugins' ? 'active' : ''; ?>">Plugins</a></li>
         <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
-        <li><a href="/terminal.php" class="<?php echo $currentPage === 'terminal' ? 'active' : ''; ?>">💻 Terminal</a></li>
+        <li><a href="/terminal.php" class="<?php echo $currentPage === 'terminal' ? 'active' : ''; ?>">Terminal</a></li>
         <?php endif; ?>
         <li><a href="/settings.php" class="<?php echo $currentPage === 'settings' ? 'active' : ''; ?>">Settings</a></li>
     </ul>

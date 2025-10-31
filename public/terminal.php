@@ -147,9 +147,8 @@ $db->execute(
     <div class="terminal-card">
         <div class="terminal-header">
             <div class="terminal-title">
-                <span style="font-size: 20px;">💻</span>
                 <span>Web Terminal</span>
-                <span class="connection-status" id="connection-status">Connecting...</span>
+                <span class="connection-status connected" id="connection-status">Ready</span>
             </div>
             <div class="terminal-controls">
                 <button class="terminal-btn terminal-btn-clear" onclick="clearTerminal()">Clear</button>
@@ -168,9 +167,8 @@ $db->execute(
 <script>
 let term;
 let fitAddon;
-let ws;
-let reconnectAttempts = 0;
-const maxReconnectAttempts = 5;
+let sessionId = null;
+let commandBuffer = '';
 
 function initTerminal() {
     // Create terminal
@@ -215,91 +213,111 @@ function initTerminal() {
         fitAddon.fit();
     });
 
-    // Connect to WebSocket
-    connectWebSocket();
-}
-
-function connectWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/terminal-ws.php`;
-    
-    updateConnectionStatus('Connecting...');
-    
-    ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-        updateConnectionStatus('Connected', true);
-        reconnectAttempts = 0;
-        
-        // Send terminal size
-        ws.send(JSON.stringify({
-            type: 'resize',
-            cols: term.cols,
-            rows: term.rows
-        }));
-    };
-
-    ws.onmessage = (event) => {
-        try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'output') {
-                term.write(data.data);
-            }
-        } catch (e) {
-            // Raw data
-            term.write(event.data);
-        }
-    };
-
-    ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        updateConnectionStatus('Error', false);
-    };
-
-    ws.onclose = () => {
-        updateConnectionStatus('Disconnected', false);
-        
-        // Auto-reconnect
-        if (reconnectAttempts < maxReconnectAttempts) {
-            reconnectAttempts++;
-            setTimeout(() => {
-                term.write('\r\n\x1b[33mConnection lost. Reconnecting...\x1b[0m\r\n');
-                connectWebSocket();
-            }, 2000);
-        } else {
-            term.write('\r\n\x1b[31mConnection lost. Max reconnection attempts reached.\x1b[0m\r\n');
-            term.write('\x1b[33mClick "Reconnect" to try again.\x1b[0m\r\n');
-        }
-    };
+    // Initialize session
+    initSession();
 
     // Handle terminal input
     term.onData(data => {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'input',
-                data: data
-            }));
+        if (data === '\r') {
+            // Enter pressed - execute command
+            executeCommand(commandBuffer);
+            commandBuffer = '';
+        } else if (data === '\x7F') {
+            // Backspace
+            if (commandBuffer.length > 0) {
+                commandBuffer = commandBuffer.slice(0, -1);
+                term.write('\b \b');
+            }
+        } else if (data === '\x03') {
+            // Ctrl+C
+            term.write('^C\r\n$ ');
+            commandBuffer = '';
+        } else {
+            // Regular character
+            commandBuffer += data;
+            term.write(data);
         }
     });
 }
 
-function updateConnectionStatus(status, isConnected) {
-    const statusEl = document.getElementById('connection-status');
-    statusEl.textContent = status;
-    statusEl.className = 'connection-status ' + (isConnected ? 'connected' : 'disconnected');
+function initSession() {
+    fetch('/api/terminal-exec.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'init' })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            sessionId = data.session_id;
+            term.write('\x1b[32mServerOS Web Terminal\x1b[0m\r\n');
+            term.write('Type commands and press Enter. Type "exit" to close.\r\n\r\n');
+            term.write('$ ');
+        } else {
+            term.write('\x1b[31mFailed to initialize terminal session\x1b[0m\r\n');
+        }
+    })
+    .catch(error => {
+        term.write('\x1b[31mError: ' + error.message + '\x1b[0m\r\n');
+    });
+}
+
+function executeCommand(command) {
+    if (!command.trim()) {
+        term.write('\r\n$ ');
+        return;
+    }
+
+    term.write('\r\n');
+
+    if (command.toLowerCase() === 'exit') {
+        term.write('\x1b[33mBye!\x1b[0m\r\n');
+        commandBuffer = '';
+        return;
+    }
+
+    if (command.toLowerCase() === 'clear') {
+        term.clear();
+        term.write('$ ');
+        return;
+    }
+
+    fetch('/api/terminal-exec.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'exec',
+            command: command,
+            session_id: sessionId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.output) {
+                term.write(data.output.replace(/\n/g, '\r\n'));
+            }
+        } else {
+            term.write('\x1b[31mError: ' + (data.error || 'Command failed') + '\x1b[0m\r\n');
+        }
+        term.write('$ ');
+    })
+    .catch(error => {
+        term.write('\x1b[31mError: ' + error.message + '\x1b[0m\r\n');
+        term.write('$ ');
+    });
 }
 
 function clearTerminal() {
     term.clear();
+    term.write('$ ');
 }
 
 function reconnectTerminal() {
-    reconnectAttempts = 0;
-    if (ws) {
-        ws.close();
-    }
-    term.write('\r\n\x1b[33mReconnecting...\x1b[0m\r\n');
-    connectWebSocket();
+    term.clear();
+    term.write('\x1b[33mReconnecting...\x1b[0m\r\n');
+    commandBuffer = '';
+    initSession();
 }
 
 // Initialize on page load
