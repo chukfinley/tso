@@ -65,19 +65,131 @@ $stats['total_users'] = $db->fetchOne("SELECT COUNT(*) as count FROM users")['co
         </div>
     </div>
 
+    <!-- System Monitoring Grid -->
+    <div class="system-monitoring-grid">
+        <!-- CPU Card -->
+        <div class="card monitor-card">
+            <div class="card-header">
+                <span class="monitor-icon">⚙️</span> CPU
+            </div>
+            <div class="card-body">
+                <div class="monitor-stat">
+                    <div class="stat-label">Model</div>
+                    <div class="stat-value" id="cpu-model">Loading...</div>
+                </div>
+                <div class="monitor-stat">
+                    <div class="stat-label">Cores / Architecture</div>
+                    <div class="stat-value" id="cpu-cores">Loading...</div>
+                </div>
+                <div class="monitor-stat">
+                    <div class="stat-label">Frequency</div>
+                    <div class="stat-value" id="cpu-freq">Loading...</div>
+                </div>
+                <div class="monitor-stat">
+                    <div class="stat-label">Usage</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="cpu-usage-bar" style="width: 0%"></div>
+                        <div class="progress-text" id="cpu-usage-text">0%</div>
+                    </div>
+                </div>
+                <div class="monitor-stat">
+                    <div class="stat-label">Load Average (1m / 5m / 15m)</div>
+                    <div class="stat-value" id="cpu-load">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Memory Card -->
+        <div class="card monitor-card">
+            <div class="card-header">
+                <span class="monitor-icon">💾</span> Memory (RAM)
+            </div>
+            <div class="card-body">
+                <div class="monitor-stat">
+                    <div class="stat-label">Total Memory</div>
+                    <div class="stat-value" id="mem-total">Loading...</div>
+                </div>
+                <div class="monitor-stat">
+                    <div class="stat-label">Used / Available</div>
+                    <div class="stat-value" id="mem-usage">Loading...</div>
+                </div>
+                <div class="monitor-stat">
+                    <div class="stat-label">Memory Usage</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="mem-usage-bar" style="width: 0%"></div>
+                        <div class="progress-text" id="mem-usage-text">0%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Swap Card -->
+        <div class="card monitor-card">
+            <div class="card-header">
+                <span class="monitor-icon">💿</span> Swap
+            </div>
+            <div class="card-body">
+                <div class="monitor-stat">
+                    <div class="stat-label">Total Swap</div>
+                    <div class="stat-value" id="swap-total">Loading...</div>
+                </div>
+                <div class="monitor-stat">
+                    <div class="stat-label">Used / Free</div>
+                    <div class="stat-value" id="swap-usage">Loading...</div>
+                </div>
+                <div class="monitor-stat">
+                    <div class="stat-label">Swap Usage</div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="swap-usage-bar" style="width: 0%"></div>
+                        <div class="progress-text" id="swap-usage-text">0%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Motherboard & Uptime Card -->
+        <div class="card monitor-card">
+            <div class="card-header">
+                <span class="monitor-icon">🖥️</span> System Info
+            </div>
+            <div class="card-body">
+                <div class="monitor-stat">
+                    <div class="stat-label">Motherboard</div>
+                    <div class="stat-value" id="mb-info">Loading...</div>
+                </div>
+                <div class="monitor-stat">
+                    <div class="stat-label">System Uptime</div>
+                    <div class="stat-value" id="system-uptime">Loading...</div>
+                </div>
+                <div class="monitor-stat">
+                    <div class="stat-label">Hostname</div>
+                    <div class="stat-value"><?php echo gethostname(); ?></div>
+                </div>
+                <div class="monitor-stat">
+                    <div class="stat-label">System Time</div>
+                    <div class="stat-value" id="system-time"><?php echo date('Y-m-d H:i:s'); ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Network Interfaces Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="monitor-icon">🌐</span> Network Interfaces
+        </div>
+        <div class="card-body">
+            <div id="network-interfaces">
+                <p style="color: #666; text-align: center;">Loading network information...</p>
+            </div>
+        </div>
+    </div>
+
     <!-- System Overview -->
     <div class="card">
         <div class="card-header">System Overview</div>
         <div class="card-body">
             <table class="table">
-                <tr>
-                    <td><strong>Hostname:</strong></td>
-                    <td><?php echo gethostname(); ?></td>
-                </tr>
-                <tr>
-                    <td><strong>System Time:</strong></td>
-                    <td><?php echo date('Y-m-d H:i:s'); ?></td>
-                </tr>
                 <tr>
                     <td><strong>Server Software:</strong></td>
                     <td><?php echo $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown'; ?></td>
