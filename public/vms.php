@@ -182,3 +182,443 @@ $pageTitle = 'Virtual Machines';
 </div>
 
 <!-- Modals and Scripts included in separate file due to size -->
+<!-- Create VM Modal -->
+<div id="createModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <h2 style="color: #fff; margin-bottom: 20px;">Create New Virtual Machine</h2>
+        <form method="POST">
+            <input type="hidden" name="action" value="create">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label>VM Name *</label>
+                    <input type="text" name="name" class="form-control" required pattern="[a-zA-Z0-9_-]+" title="Only letters, numbers, underscore and dash allowed">
+                </div>
+
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" name="description" class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label>CPU Cores *</label>
+                    <input type="number" name="cpu_cores" class="form-control" value="2" min="1" max="16" required>
+                </div>
+
+                <div class="form-group">
+                    <label>RAM (MB) *</label>
+                    <input type="number" name="ram_mb" class="form-control" value="2048" min="512" step="512" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Disk Size (GB) *</label>
+                    <input type="number" name="disk_size_gb" class="form-control" value="20" min="1" max="500" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Disk Format *</label>
+                    <select name="disk_format" class="form-control" required>
+                        <option value="qcow2">QCOW2 (Recommended)</option>
+                        <option value="raw">RAW</option>
+                        <option value="vmdk">VMDK</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Boot Order *</label>
+                    <select name="boot_order" class="form-control" required>
+                        <option value="cd,hd">CD-ROM, then Hard Disk</option>
+                        <option value="hd,cd">Hard Disk, then CD-ROM</option>
+                        <option value="cd">CD-ROM only</option>
+                        <option value="hd">Hard Disk only</option>
+                        <option value="n">Network (PXE)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>ISO Image</label>
+                    <select name="iso_path" class="form-control" id="iso_path">
+                        <option value="">None</option>
+                        <option value="" disabled>Loading...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="boot_from_disk" id="boot_from_disk_create"> Boot from Physical Disk
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>Physical Disk Device</label>
+                    <select name="physical_disk_device" class="form-control" id="physical_disk_create">
+                        <option value="">None</option>
+                        <option value="" disabled>Loading...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Network Mode *</label>
+                    <select name="network_mode" class="form-control" id="network_mode_create" onchange="toggleBridge('create')" required>
+                        <option value="nat">NAT (Default)</option>
+                        <option value="bridge">Bridged Network</option>
+                        <option value="user">User Mode</option>
+                        <option value="none">No Network</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="bridge_group_create" style="display: none;">
+                    <label>Network Bridge</label>
+                    <select name="network_bridge" class="form-control" id="network_bridge_create">
+                        <option value="">Select Bridge</option>
+                        <option value="" disabled>Loading...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Display Type *</label>
+                    <select name="display_type" class="form-control" required>
+                        <option value="spice">SPICE (Recommended)</option>
+                        <option value="vnc">VNC</option>
+                        <option value="none">Headless</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" class="btn btn-primary">Create VM</button>
+                <button type="button" onclick="closeCreateModal()" class="btn btn-secondary">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit VM Modal -->
+<div id="editModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <h2 style="color: #fff; margin-bottom: 20px;">Edit Virtual Machine</h2>
+        <form method="POST">
+            <input type="hidden" name="action" value="update">
+            <input type="hidden" name="vm_id" id="edit_vm_id">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label>VM Name *</label>
+                    <input type="text" name="name" id="edit_name" class="form-control" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" name="description" id="edit_description" class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label>CPU Cores *</label>
+                    <input type="number" name="cpu_cores" id="edit_cpu_cores" class="form-control" min="1" max="16" required>
+                </div>
+
+                <div class="form-group">
+                    <label>RAM (MB) *</label>
+                    <input type="number" name="ram_mb" id="edit_ram_mb" class="form-control" min="512" step="512" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Boot Order *</label>
+                    <select name="boot_order" id="edit_boot_order" class="form-control" required>
+                        <option value="cd,hd">CD-ROM, then Hard Disk</option>
+                        <option value="hd,cd">Hard Disk, then CD-ROM</option>
+                        <option value="cd">CD-ROM only</option>
+                        <option value="hd">Hard Disk only</option>
+                        <option value="n">Network (PXE)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>ISO Image</label>
+                    <select name="iso_path" id="edit_iso_path" class="form-control">
+                        <option value="">None</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="boot_from_disk" id="edit_boot_from_disk"> Boot from Physical Disk
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label>Physical Disk Device</label>
+                    <select name="physical_disk_device" id="edit_physical_disk" class="form-control">
+                        <option value="">None</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Network Mode *</label>
+                    <select name="network_mode" id="edit_network_mode" class="form-control" onchange="toggleBridge('edit')" required>
+                        <option value="nat">NAT (Default)</option>
+                        <option value="bridge">Bridged Network</option>
+                        <option value="user">User Mode</option>
+                        <option value="none">No Network</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="bridge_group_edit" style="display: none;">
+                    <label>Network Bridge</label>
+                    <select name="network_bridge" id="edit_network_bridge" class="form-control">
+                        <option value="">Select Bridge</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Display Type *</label>
+                    <select name="display_type" id="edit_display_type" class="form-control" required>
+                        <option value="spice">SPICE (Recommended)</option>
+                        <option value="vnc">VNC</option>
+                        <option value="none">Headless</option>
+                    </select>
+                </div>
+            </div>
+
+            <p style="color: #ff9800; margin-top: 15px;">⚠️ VM must be stopped to update configuration</p>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button type="submit" class="btn btn-primary">Update VM</button>
+                <button type="button" onclick="closeEditModal()" class="btn btn-secondary">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Logs Modal -->
+<div id="logsModal" class="modal">
+    <div class="modal-content" style="max-width: 900px;">
+        <h2 style="color: #fff; margin-bottom: 20px;">VM Logs: <span id="logs_vm_name"></span></h2>
+        <div style="background: #000; border: 1px solid #333; border-radius: 5px; padding: 15px; max-height: 500px; overflow-y: auto; font-family: monospace; font-size: 12px;">
+            <pre id="logs_content" style="color: #0f0; margin: 0; white-space: pre-wrap;"></pre>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button onclick="refreshLogs()" class="btn btn-primary">↻ Refresh</button>
+            <button onclick="closeLogsModal()" class="btn btn-secondary">Close</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.modal-content {
+    background: #242424;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 30px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+</style>
+
+<script>
+let currentLogVmId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadIsos();
+    loadPhysicalDisks();
+    loadNetworkBridges();
+    setInterval(refreshVMStatus, 3000);
+});
+
+function loadIsos() {
+    fetch('/api/vm-control.php?action=list_isos')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const selects = ['iso_path', 'edit_iso_path'];
+                selects.forEach(id => {
+                    const select = document.getElementById(id);
+                    if (select) {
+                        Array.from(select.options).forEach(opt => {
+                            if (opt.disabled) opt.remove();
+                        });
+                        data.isos.forEach(iso => {
+                            const option = document.createElement('option');
+                            option.value = iso.path;
+                            option.textContent = iso.name + ' (' + iso.size_formatted + ')';
+                            select.appendChild(option);
+                        });
+                    }
+                });
+            }
+        });
+}
+
+function loadPhysicalDisks() {
+    fetch('/api/vm-control.php?action=list_disks')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const selects = ['physical_disk_create', 'edit_physical_disk'];
+                selects.forEach(id => {
+                    const select = document.getElementById(id);
+                    if (select) {
+                        Array.from(select.options).forEach(opt => {
+                            if (opt.disabled) opt.remove();
+                        });
+                        data.disks.forEach(disk => {
+                            const option = document.createElement('option');
+                            option.value = disk.device;
+                            option.textContent = disk.device + ' (' + disk.size + ' - ' + disk.model + ')';
+                            select.appendChild(option);
+                        });
+                    }
+                });
+            }
+        });
+}
+
+function loadNetworkBridges() {
+    fetch('/api/vm-control.php?action=list_bridges')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const selects = ['network_bridge_create', 'edit_network_bridge'];
+                selects.forEach(id => {
+                    const select = document.getElementById(id);
+                    if (select) {
+                        Array.from(select.options).forEach(opt => {
+                            if (opt.disabled) opt.remove();
+                        });
+                        data.bridges.forEach(bridge => {
+                            const option = document.createElement('option');
+                            option.value = bridge;
+                            option.textContent = bridge;
+                            select.appendChild(option);
+                        });
+                    }
+                });
+            }
+        });
+}
+
+function toggleBridge(mode) {
+    const networkMode = document.getElementById('network_mode_' + mode).value;
+    const bridgeGroup = document.getElementById('bridge_group_' + mode);
+    bridgeGroup.style.display = networkMode === 'bridge' ? 'block' : 'none';
+}
+
+function openCreateModal() {
+    document.getElementById('createModal').style.display = 'flex';
+}
+
+function closeCreateModal() {
+    document.getElementById('createModal').style.display = 'none';
+}
+
+function openEditModal(vm) {
+    document.getElementById('edit_vm_id').value = vm.id;
+    document.getElementById('edit_name').value = vm.name;
+    document.getElementById('edit_description').value = vm.description || '';
+    document.getElementById('edit_cpu_cores').value = vm.cpu_cores;
+    document.getElementById('edit_ram_mb').value = vm.ram_mb;
+    document.getElementById('edit_boot_order').value = vm.boot_order;
+    document.getElementById('edit_iso_path').value = vm.iso_path || '';
+    document.getElementById('edit_boot_from_disk').checked = vm.boot_from_disk == 1;
+    document.getElementById('edit_physical_disk').value = vm.physical_disk_device || '';
+    document.getElementById('edit_network_mode').value = vm.network_mode;
+    document.getElementById('edit_network_bridge').value = vm.network_bridge || '';
+    document.getElementById('edit_display_type').value = vm.display_type;
+    toggleBridge('edit');
+    document.getElementById('editModal').style.display = 'flex';
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+function controlVM(vmId, action) {
+    const confirmMessage = action === 'stop' ? 'Stop this VM?' : action === 'restart' ? 'Restart this VM?' : null;
+    if (confirmMessage && !confirm(confirmMessage)) return;
+
+    fetch('/api/vm-control.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action, vm_id: vmId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
+
+function viewLogs(vmId, vmName) {
+    currentLogVmId = vmId;
+    document.getElementById('logs_vm_name').textContent = vmName;
+    document.getElementById('logsModal').style.display = 'flex';
+    refreshLogs();
+}
+
+function refreshLogs() {
+    if (!currentLogVmId) return;
+    fetch('/api/vm-control.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logs', vm_id: currentLogVmId, lines: 200 })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('logs_content').textContent = data.logs || 'No logs available';
+        }
+    });
+}
+
+function closeLogsModal() {
+    document.getElementById('logsModal').style.display = 'none';
+    currentLogVmId = null;
+}
+
+function refreshVMStatus() {
+    const rows = document.querySelectorAll('#vms-tbody tr');
+    rows.forEach(row => {
+        const vmId = row.getAttribute('data-vm-id');
+        fetch('/api/vm-control.php?action=status&vm_id=' + vmId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const statusBadge = document.getElementById('status-' + vmId);
+                    if (statusBadge) {
+                        statusBadge.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+                        statusBadge.className = 'badge badge-' + (data.status === 'running' ? 'active' : 'inactive');
+                    }
+                }
+            });
+    });
+}
+
+document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', function(e) {
+        if (e.target === this) this.style.display = 'none';
+    });
+});
+</script>
+
+<?php include VIEWS_PATH . '/layout/footer.php'; ?>
