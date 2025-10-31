@@ -1,8 +1,15 @@
 # Database Migration Instructions
 
-## Fix 500 Error on VM Page
+## How Migrations Work
 
-The 500 error is caused by missing database tables (virtual_machines, vm_backups, shares, etc.).
+The migration system is split into two parts:
+
+1. **Fresh Installations**: All base tables are created from `init.sql` during installation
+2. **Updates**: The `migrate-database.php` script only handles NEW tables/columns added after the current version
+
+All base tables (users, sessions, activity_log, virtual_machines, vm_backups, shares, share_users, share_permissions, share_access_log, system_logs) are defined in `init.sql` and created automatically during fresh installations.
+
+## Running Migrations
 
 ### Option 1: Run Migration Script Directly (RECOMMENDED - Takes seconds)
 
@@ -11,8 +18,8 @@ sudo php /opt/serveros/tools/migrate-database.php
 ```
 
 This will:
-- ✓ Check for and create missing tables
-- ✓ Create VM storage directories
+- ✓ Check for and create NEW tables/columns (added in latest version)
+- ✓ Create VM storage directories if missing
 - ✓ Set proper permissions
 - ✓ Preserve all existing data
 
@@ -38,15 +45,23 @@ sudo php tools/migrate-database.php
 sudo systemctl restart apache2
 ```
 
-## What Gets Installed
+## Database Schema
 
-### Database Tables Created
+### Base Tables (Created by init.sql on Fresh Install)
+
+All base tables are defined in `init.sql` and created automatically during fresh installations:
+- `users` - User accounts
+- `sessions` - User sessions
+- `activity_log` - Activity logging
 - `virtual_machines` - VM configuration and state
 - `vm_backups` - VM backup management
 - `shares` - Network shares configuration
 - `share_users` - Samba users
 - `share_permissions` - Share access control
 - `share_access_log` - Share access logging
+- `system_logs` - System-wide logging
+
+**Note**: The migration script (`migrate-database.php`) only handles NEW tables/columns that are added in future versions. Existing tables are not checked by the migration script since they're already in `init.sql`.
 
 ### Storage Directories Created
 - `/opt/serveros/storage/vms` - VM disk images

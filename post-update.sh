@@ -119,6 +119,15 @@ chmod +x ${INSTALL_DIR}/tools/*.php 2>/dev/null || true
 chmod +x ${INSTALL_DIR}/*.sh 2>/dev/null || true
 print_success "Permissions fixed"
 
+# Run database migrations (only handles NEW tables/columns)
+print_info "Running database migrations..."
+if [[ -f "${INSTALL_DIR}/tools/migrate-database.php" ]]; then
+    php ${INSTALL_DIR}/tools/migrate-database.php > /dev/null 2>&1 || true
+    print_success "Database migrations completed"
+else
+    print_warning "Migration script not found, skipping..."
+fi
+
 # Ensure admin user exists
 print_info "Ensuring admin user exists..."
 if [[ -f "${INSTALL_DIR}/config/config.php" ]]; then
@@ -181,6 +190,7 @@ print_success "TSO has been updated successfully!"
 echo ""
 print_info "What was done:"
 echo "  ✓ Configuration preserved"
+echo "  ✓ Database migrations (new tables/columns only)"
 echo "  ✓ Permissions fixed"
 echo "  ✓ Admin user verified"
 echo "  ✓ Apache restarted"

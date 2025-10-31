@@ -256,11 +256,14 @@ create_database() {
 }
 
 import_schema() {
-    print_info "Importing database schema..."
+    print_info "Importing database schema (base tables)..."
 
     # Get script directory
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+    # init.sql contains all base tables (users, sessions, activity_log, virtual_machines, 
+    # vm_backups, shares, share_users, share_permissions, share_access_log, system_logs)
+    # This is only run on fresh installations
     if [[ -f "${SCRIPT_DIR}/init.sql" ]]; then
         run_command \
             "mysql ${DB_NAME} < '${SCRIPT_DIR}/init.sql' 2>&1" \
@@ -276,7 +279,9 @@ import_schema() {
 run_database_migrations() {
     print_info "Running database migrations..."
 
-    # Run migration script if it exists
+    # migrate-database.php only handles NEW tables/columns added after the current version.
+    # Base tables are already in init.sql and created during import_schema().
+    # This ensures updates get new features while preserving existing data.
     if [[ -f "${INSTALL_DIR}/tools/migrate-database.php" ]]; then
         php ${INSTALL_DIR}/tools/migrate-database.php
         print_success "Database migrations completed"
@@ -1002,7 +1007,8 @@ perform_update() {
     echo ""
     print_info "Configuration preserved from existing installation"
     print_info "Application files updated to latest version"
-    print_info "Database and users unchanged"
+    print_info "Database migrations applied (new tables/columns only)"
+    print_info "Existing database tables and data preserved"
     echo ""
     print_info "To update in the future, you can simply run:"
     echo "  cd ${INSTALL_DIR} && sudo git pull && sudo ./post-update.sh"

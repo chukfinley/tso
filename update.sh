@@ -237,11 +237,12 @@ show_completion() {
     echo "  ✓ Application files (PHP, HTML, CSS, JS)"
     echo "  ✓ Monitoring system"
     echo "  ✓ Tools and utilities"
-    echo "  ✓ Database schema file"
+    echo "  ✓ Database migrations (new tables/columns only)"
     echo ""
     print_info "What was preserved:"
     echo "  ✓ Configuration (database credentials)"
-    echo "  ✓ Database and all users"
+    echo "  ✓ Existing database tables and data"
+    echo "  ✓ All users and permissions"
     echo "  ✓ Logs and storage"
     echo ""
     IP_ADDRESS=$(hostname -I | awk '{print $1}')
@@ -273,6 +274,15 @@ main() {
     if [ -f "${INSTALL_DIR}/scripts/install-monitoring.sh" ]; then
         print_info "Updating monitoring system..."
         bash "${INSTALL_DIR}/scripts/install-monitoring.sh"
+    fi
+    
+    # Run database migrations (only handles NEW tables/columns)
+    print_info "Running database migrations..."
+    if [[ -f "${INSTALL_DIR}/tools/migrate-database.php" ]]; then
+        php ${INSTALL_DIR}/tools/migrate-database.php
+        print_success "Database migrations completed"
+    else
+        print_warning "Migration script not found, skipping..."
     fi
     
     fix_permissions
