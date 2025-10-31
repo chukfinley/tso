@@ -242,10 +242,19 @@ $pageTitle = 'Virtual Machines';
 
                 <div class="form-group">
                     <label>ISO Image</label>
-                    <select name="iso_path" class="form-control" id="iso_path">
-                        <option value="">None</option>
-                        <option value="" disabled>Loading...</option>
-                    </select>
+                    <div style="display: flex; gap: 10px; align-items: flex-end;">
+                        <select name="iso_path" class="form-control" id="iso_path" style="flex: 1;">
+                            <option value="">None</option>
+                            <option value="" disabled>Loading...</option>
+                        </select>
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <input type="file" id="iso_upload_input" accept=".iso" style="display: none;" onchange="uploadIso()">
+                            <button type="button" onclick="document.getElementById('iso_upload_input').click()" class="btn btn-secondary" style="white-space: nowrap;">
+                                📤 Upload ISO
+                            </button>
+                            <div id="iso_upload_progress" style="display: none; color: #0f0; font-size: 12px;"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -340,9 +349,18 @@ $pageTitle = 'Virtual Machines';
 
                 <div class="form-group">
                     <label>ISO Image</label>
-                    <select name="iso_path" id="edit_iso_path" class="form-control">
-                        <option value="">None</option>
-                    </select>
+                    <div style="display: flex; gap: 10px; align-items: flex-end;">
+                        <select name="iso_path" id="edit_iso_path" class="form-control" style="flex: 1;">
+                            <option value="">None</option>
+                        </select>
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <input type="file" id="edit_iso_upload_input" accept=".iso" style="display: none;" onchange="uploadIso('edit')">
+                            <button type="button" onclick="document.getElementById('edit_iso_upload_input').click()" class="btn btn-secondary" style="white-space: nowrap;">
+                                📤 Upload ISO
+                            </button>
+                            <div id="edit_iso_upload_progress" style="display: none; color: #0f0; font-size: 12px;"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -455,19 +473,134 @@ function loadIsos() {
                 selects.forEach(id => {
                     const select = document.getElementById(id);
                     if (select) {
+                        // Save current selection
+                        const currentValue = select.value;
+                        
+                        // Clear existing options except "None"
                         Array.from(select.options).forEach(opt => {
-                            if (opt.disabled) opt.remove();
+                            if (opt.disabled || opt.value === '') {
+                                if (opt.value === '') {
+                                    // Keep "None" option
+                                    return;
+                                }
+                                opt.remove();
+                            } else {
+                                opt.remove();
+                            }
                         });
+                        
+                        // Add ISO options
                         data.isos.forEach(iso => {
                             const option = document.createElement('option');
                             option.value = iso.path;
                             option.textContent = iso.name + ' (' + iso.size_formatted + ')';
                             select.appendChild(option);
                         });
+                        
+                        // Restore selection if it still exists
+                        if (currentValue) {
+                            select.value = currentValue;
+                        }
                     }
                 });
             }
         });
+}
+
+function uploadIso(mode = 'create') {
+    const inputId = mode === 'edit' ? 'edit_iso_upload_input' : 'iso_upload_input';
+    const progressId = mode === 'edit' ? 'edit_iso_upload_progress' : 'iso_upload_progress';
+    const input = document.getElementById(inputId);
+    const progress = document.getElementById(progressId);
+    
+    if (!input.files || input.files.length === 0) {
+        return;
+    }
+    
+    const file = input.files[0];
+    
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith('.iso')) {
+        alert('Please select an ISO file (.iso extension)');
+        input.value = '';
+        return;
+    }
+    
+    // Validate file size (max 20GB)
+    const maxSize = 20 * 1024 * 1024 * 1024; // 20GB in bytes
+    if (file.size > maxSize) {
+        alert('File size too large. Maximum size is 20GB.');
+        input.value = '';
+        return;
+    }
+    
+    // Show progress
+    progress.style.display = 'block';
+    progress.textContent = 'Uploading ' + file.name + '...';
+    
+    // Create form data
+    const formData = new FormData();
+    formData.append('iso_file', file);
+    
+    // Upload file
+    fetch('/api/vm-control.php?action=upload_iso', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            progress.textContent = '✓ Upload complete: ' + data.filename;
+            progress.style.color = '#0f0';
+            
+            // Clear input
+            input.value = '';
+            
+            // Reload ISO list
+            loadIsos();
+            
+            // Auto-select the uploaded ISO if in create mode
+            if (mode === 'create') {
+                setTimeout(() => {
+                    const select = document.getElementById('iso_path');
+                    if (select && data.path) {
+                        select.value = data.path;
+                    }
+                }, 500);
+            } else {
+                setTimeout(() => {
+                    const select = document.getElementById('edit_iso_path');
+                    if (select && data.path) {
+                        select.value = data.path;
+                    }
+                }, 500);
+            }
+            
+            // Hide progress after 3 seconds
+            setTimeout(() => {
+                progress.style.display = 'none';
+            }, 3000);
+        } else {
+            progress.textContent = '✗ Error: ' + (data.error || 'Upload failed');
+            progress.style.color = '#f00';
+            input.value = '';
+            
+            // Hide progress after 5 seconds
+            setTimeout(() => {
+                progress.style.display = 'none';
+            }, 5000);
+        }
+    })
+    .catch(error => {
+        progress.textContent = '✗ Error: ' + error.message;
+        progress.style.color = '#f00';
+        input.value = '';
+        
+        // Hide progress after 5 seconds
+        setTimeout(() => {
+            progress.style.display = 'none';
+        }, 5000);
+    });
 }
 
 function loadPhysicalDisks() {

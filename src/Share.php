@@ -76,17 +76,35 @@ class Share {
             is_active, created_by
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
+        // Helper function to normalize boolean values to integers
+        $normalizeBool = function($value, $default = false) {
+            if ($value === null || $value === '') {
+                return $default ? 1 : 0;
+            }
+            if (is_bool($value)) {
+                return $value ? 1 : 0;
+            }
+            if (is_string($value)) {
+                $value = strtolower(trim($value));
+                if ($value === '' || $value === '0' || $value === 'false' || $value === 'no') {
+                    return 0;
+                }
+                return 1;
+            }
+            return (int)$value ? 1 : 0;
+        };
+
         $params = [
             $shareName,
             $data['display_name'] ?? $shareName,
             $path,
             $data['comment'] ?? '',
-            $data['browseable'] ?? true,
-            $data['readonly'] ?? false,
-            $data['guest_ok'] ?? false,
+            $normalizeBool($data['browseable'] ?? null, true),
+            $normalizeBool($data['readonly'] ?? null, false),
+            $normalizeBool($data['guest_ok'] ?? null, false),
             $data['case_sensitive'] ?? 'auto',
-            $data['preserve_case'] ?? true,
-            $data['short_preserve_case'] ?? true,
+            $normalizeBool($data['preserve_case'] ?? null, true),
+            $normalizeBool($data['short_preserve_case'] ?? null, true),
             $data['valid_users'] ?? '',
             $data['write_list'] ?? '',
             $data['read_list'] ?? '',
@@ -95,7 +113,7 @@ class Share {
             $data['directory_mask'] ?? '0775',
             $data['force_user'] ?? null,
             $data['force_group'] ?? null,
-            $data['is_active'] ?? true,
+            $normalizeBool($data['is_active'] ?? null, true),
             $_SESSION['user_id'] ?? null
         ];
 
@@ -121,8 +139,29 @@ class Share {
             throw new Exception("Share not found");
         }
 
+        // Helper function to normalize boolean values to integers
+        $normalizeBool = function($value) {
+            if ($value === null) {
+                return null; // Keep null for updates so we can skip unchanged fields
+            }
+            if (is_bool($value)) {
+                return $value ? 1 : 0;
+            }
+            if (is_string($value)) {
+                $value = strtolower(trim($value));
+                if ($value === '' || $value === '0' || $value === 'false' || $value === 'no') {
+                    return 0;
+                }
+                return 1;
+            }
+            return (int)$value ? 1 : 0;
+        };
+
         $updates = [];
         $params = [];
+
+        // Boolean fields that need normalization
+        $booleanFields = ['browseable', 'readonly', 'guest_ok', 'preserve_case', 'short_preserve_case', 'is_active'];
 
         $allowedFields = [
             'display_name', 'path', 'comment', 'browseable', 'readonly', 'guest_ok',
@@ -134,7 +173,12 @@ class Share {
         foreach ($allowedFields as $field) {
             if (isset($data[$field])) {
                 $updates[] = "$field = ?";
-                $params[] = $data[$field];
+                // Normalize boolean fields to integers
+                if (in_array($field, $booleanFields)) {
+                    $params[] = $normalizeBool($data[$field]);
+                } else {
+                    $params[] = $data[$field];
+                }
             }
         }
 

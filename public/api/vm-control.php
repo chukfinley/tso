@@ -23,6 +23,83 @@ $vmId = $input['vm_id'] ?? $_GET['vm_id'] ?? 0;
 
 try {
     switch ($action) {
+        case 'upload_iso':
+            // Handle file upload
+            if (!isset($_FILES['iso_file']) || $_FILES['iso_file']['error'] !== UPLOAD_ERR_OK) {
+                throw new Exception('No file uploaded or upload error occurred');
+            }
+
+            $uploadedFile = $_FILES['iso_file'];
+            $fileName = $uploadedFile['name'];
+            $fileTmpPath = $uploadedFile['tmp_name'];
+            $fileSize = $uploadedFile['size'];
+
+            // Validate file extension
+            $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+            if ($fileExtension !== 'iso') {
+                throw new Exception('Invalid file type. Only .iso files are allowed.');
+            }
+
+            // Validate file size (max 20GB)
+            $maxSize = 20 * 1024 * 1024 * 1024; // 20GB in bytes
+            if ($fileSize > $maxSize) {
+                throw new Exception('File size too large. Maximum size is 20GB.');
+            }
+
+            // Sanitize filename (remove special characters, keep alphanumeric, dash, underscore, dot)
+            $safeFileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', basename($fileName));
+            $isoDir = '/opt/serveros/storage/isos';
+
+            // Ensure ISO directory exists
+            if (!is_dir($isoDir)) {
+                if (!mkdir($isoDir, 0755, true)) {
+                    throw new Exception('Failed to create ISO directory');
+                }
+            }
+
+            // Check if file already exists
+            $destinationPath = $isoDir . '/' . $safeFileName;
+            if (file_exists($destinationPath)) {
+                // Add timestamp to make filename unique
+                $baseName = pathinfo($safeFileName, PATHINFO_FILENAME);
+                $extension = pathinfo($safeFileName, PATHINFO_EXTENSION);
+                $safeFileName = $baseName . '_' . time() . '.' . $extension;
+                $destinationPath = $isoDir . '/' . $safeFileName;
+            }
+
+            // Move uploaded file to ISO directory
+            if (!move_uploaded_file($fileTmpPath, $destinationPath)) {
+                throw new Exception('Failed to save uploaded file');
+            }
+
+            // Set proper permissions (readable by all, writable by owner)
+            chmod($destinationPath, 0644);
+
+            // Log activity
+            $db->query(
+                "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)",
+                [$_SESSION['user_id'], 'iso_upload', "Uploaded ISO file: {$safeFileName} (" . number_format($fileSize / 1024 / 1024, 2) . " MB)", $_SERVER['REMOTE_ADDR']]
+            );
+
+            // Format file size for display
+            $formatBytes = function($bytes, $precision = 2) {
+                $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+                $bytes = max($bytes, 0);
+                $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+                $pow = min($pow, count($units) - 1);
+                $bytes /= pow(1024, $pow);
+                return round($bytes, $precision) . ' ' . $units[$pow];
+            };
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'ISO file uploaded successfully',
+                'filename' => $safeFileName,
+                'path' => $destinationPath,
+                'size' => $fileSize,
+                'size_formatted' => $formatBytes($fileSize)
+            ]);
+            break;
         case 'start':
             $vm->start($vmId);
 
