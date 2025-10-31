@@ -518,7 +518,7 @@ configure_firewall() {
     if command -v ufw &> /dev/null; then
         ufw allow 80/tcp > /dev/null 2>&1 || true
         ufw allow 443/tcp > /dev/null 2>&1 || true
-        print_success "Firewall configured (HTTP/HTTPS allowed)"
+        print_success "Firewall configured (HTTP redirects to HTTPS)"
     else
         print_warning "UFW not installed, skipping firewall configuration"
     fi
@@ -537,8 +537,10 @@ show_completion_info() {
     echo ""
     echo -e "${BLUE}Access Information:${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "  URL:      ${GREEN}http://${IP_ADDRESS}${NC}"
-    echo -e "  Hostname: ${GREEN}http://${HOSTNAME}${NC}"
+    echo -e "  URL:      ${GREEN}https://${IP_ADDRESS}${NC}"
+    echo -e "  Hostname: ${GREEN}https://${HOSTNAME}${NC}"
+    echo ""
+    echo -e "${YELLOW}  Note: Using self-signed certificate (browser warnings are expected)${NC}"
     echo ""
     echo -e "${BLUE}Default Credentials:${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -558,8 +560,10 @@ show_completion_info() {
     echo -e "${YELLOW}⚠  IMPORTANT SECURITY NOTES:${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  1. Change the default admin password immediately!"
-    echo "  2. Database credentials saved in: ${INSTALL_DIR}/config/config.php"
-    echo "  3. Keep database password secure: ${DB_PASS}"
+    echo "  2. Access is via HTTPS only (HTTP automatically redirects)"
+    echo "  3. Self-signed certificate is in use (browser warnings are normal)"
+    echo "  4. Database credentials saved in: ${INSTALL_DIR}/config/config.php"
+    echo "  5. Keep database password secure: ${DB_PASS}"
     echo ""
 
     # Save credentials to file
@@ -570,8 +574,9 @@ Generated: $(date)
 
 Web Access:
 -----------
-URL: http://${IP_ADDRESS}
-Hostname: http://${HOSTNAME}
+URL: https://${IP_ADDRESS}
+Hostname: https://${HOSTNAME}
+Note: Using self-signed certificate (browser warnings are expected)
 
 Default Login:
 --------------

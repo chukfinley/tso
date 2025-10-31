@@ -146,7 +146,8 @@ show_success() {
         print_success "ServerOS has been updated to the latest version!"
         echo ""
         IP_ADDRESS=$(hostname -I | awk '{print $1}')
-        print_info "Access your ServerOS at: http://${IP_ADDRESS}"
+        print_info "Access your ServerOS at: https://${IP_ADDRESS}"
+        print_info "Note: Using self-signed certificate (browser warnings are expected)"
         echo ""
     else
         echo -e "${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
