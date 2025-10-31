@@ -19,6 +19,108 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ============ Share Operations ============
 
+/**
+ * Helper function to log errors to the server
+ */
+async function logClientError(errorDetails) {
+    try {
+        await fetch('/api/logs.php?action=log_error', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(errorDetails)
+        });
+    } catch (e) {
+        // Silent fail - don't interrupt error flow
+        console.error('Failed to log error to server:', e);
+    }
+}
+
+/**
+ * Helper function to handle API responses and extract error details
+ */
+async function handleApiResponse(response, endpoint, action) {
+    // Read response text first (needed for both OK and error responses)
+    const text = await response.text();
+    
+    // Try to parse JSON even if response is not OK
+    let data = null;
+    try {
+        if (text && text.trim().length > 0) {
+            data = JSON.parse(text);
+        }
+    } catch (e) {
+        // If JSON parsing fails, create error data structure
+        data = {
+            success: false,
+            error: text && text.trim().length > 0 ? text.substring(0, 500) : `HTTP ${response.status} Error`,
+            response_text: text.substring(0, 2000)
+        };
+    }
+    
+    // If response is not OK, log detailed error and throw
+    if (!response.ok) {
+        const errorDetails = {
+            endpoint: endpoint,
+            action: action,
+            status: response.status,
+            statusText: response.statusText,
+            error: data?.error || `HTTP ${response.status} Error`,
+            file: data?.file || 'unknown',
+            line: data?.line || 'unknown',
+            trace: data?.trace || null,
+            response_text: text.substring(0, 2000),
+            url: endpoint,
+            method: 'GET',
+            timestamp: new Date().toISOString()
+        };
+        
+        // Log to server
+        await logClientError({
+            level: 'error',
+            message: `API Error: ${action} - ${errorDetails.error}`,
+            context: errorDetails
+        });
+        
+        // Create error object with all details
+        const error = new Error(data?.error || `HTTP error! status: ${response.status}`);
+        error.details = errorDetails;
+        error.responseData = data;
+        throw error;
+    }
+    
+    // Check if data indicates failure
+    if (data && !data.success) {
+        const errorDetails = {
+            endpoint: endpoint,
+            action: action,
+            status: response.status,
+            error: data.error || 'Unknown error',
+            file: data.file || null,
+            line: data.line || null,
+            trace: data.trace || null,
+            url: endpoint,
+            method: 'GET',
+            timestamp: new Date().toISOString()
+        };
+        
+        // Log to server
+        await logClientError({
+            level: 'error',
+            message: `API Error: ${action} - ${data.error}`,
+            context: errorDetails
+        });
+        
+        const error = new Error(data.error || 'Unknown error');
+        error.details = errorDetails;
+        error.responseData = data;
+        throw error;
+    }
+    
+    return data;
+}
+
 function loadShares() {
     const container = document.getElementById('shares-list');
     
@@ -34,49 +136,47 @@ function loadShares() {
     fetch('/api/share-control.php?action=list', {
         signal: controller.signal
     })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-                return response.json();
-            } else {
-                return response.text().then(text => {
-                    console.error('Non-JSON response:', text);
-                    throw new Error(`Expected JSON, got: ${text.substring(0, 100)}`);
-                });
-            }
-        })
+        .then(response => handleApiResponse(response, '/api/share-control.php', 'list'))
         .then(data => {
             clearTimeout(timeoutId);
-            if (data.success) {
-                allShares = data.shares || [];
-                displayShares(allShares);
-            } else {
-                const errorMsg = 'Failed to load shares: ' + (data.error || 'Unknown error');
-                console.error('API error:', data);
-                let errorHtml = `<p style="color: #f44336; font-weight: bold;">Error: ${escapeHtml(data.error || 'Unknown error')}</p>`;
-                if (data.file || data.line) {
-                    errorHtml += `<p style="color: #888; font-size: 12px; margin-top: 5px;">Location: ${escapeHtml((data.file || 'unknown') + ':' + (data.line || 'unknown'))}</p>`;
-                }
-                if (container) {
-                    container.innerHTML = errorHtml;
-                }
-                showError(errorMsg);
-            }
+            allShares = data.shares || [];
+            displayShares(allShares);
         })
         .catch(error => {
             clearTimeout(timeoutId);
             console.error('Error loading shares:', error);
+            
             let errorMsg = 'Failed to load shares: ';
+            let errorHtml = '';
+            
             if (error.name === 'AbortError') {
                 errorMsg += 'Request timed out. The server may be slow or unreachable.';
+                errorHtml = `<p style="color: #f44336;">Error: ${escapeHtml(errorMsg)}</p>`;
+            } else if (error.details) {
+                // Use detailed error information
+                errorMsg += error.message || error.details.error || 'Unknown error';
+                errorHtml = `<p style="color: #f44336; font-weight: bold;">Error: ${escapeHtml(error.details.error || error.message || 'Unknown error')}</p>`;
+                
+                if (error.details.file || error.details.line) {
+                    errorHtml += `<p style="color: #888; font-size: 12px; margin-top: 5px;">Location: ${escapeHtml((error.details.file || 'unknown') + ':' + (error.details.line || 'unknown'))}</p>`;
+                }
+                
+                if (error.details.trace) {
+                    errorHtml += `<details style="margin-top: 10px;"><summary style="color: #888; cursor: pointer; font-size: 12px;">Stack Trace</summary><pre style="color: #aaa; font-size: 11px; margin-top: 5px; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(error.details.trace.substring(0, 1000))}</pre></details>`;
+                }
+                
+                if (error.responseData && error.responseData.response_text) {
+                    errorHtml += `<details style="margin-top: 10px;"><summary style="color: #888; cursor: pointer; font-size: 12px;">Response Details</summary><pre style="color: #aaa; font-size: 11px; margin-top: 5px; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(error.responseData.response_text.substring(0, 500))}</pre></details>`;
+                }
+                
+                errorHtml += `<p style="color: #888; font-size: 12px; margin-top: 10px;">Check the logs page for full error details.</p>`;
             } else {
-                errorMsg += error.message;
+                errorMsg += error.message || 'Unknown error';
+                errorHtml = `<p style="color: #f44336;">Error: ${escapeHtml(errorMsg)}</p><p style="color: #888; font-size: 12px; margin-top: 10px;">Check browser console for details.</p>`;
             }
+            
             if (container) {
-                container.innerHTML = `<p style="color: #f44336;">Error: ${escapeHtml(errorMsg)}</p><p style="color: #888; font-size: 12px; margin-top: 10px;">Check browser console for details.</p>`;
+                container.innerHTML = errorHtml;
             }
             showError(errorMsg);
         });

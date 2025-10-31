@@ -8,16 +8,22 @@ class Share {
     private $sambaConfPath = '/etc/samba/smb.conf';
     private $shareBasePath = '/srv/samba';
     private $isRoot = false;
+    private static $schemaEnsured = false;
 
     public function __construct() {
         $this->db = Database::getInstance();
-        
-        // Check if running as root
-        $this->isRoot = (posix_geteuid() === 0);
-        
-        // Ensure share base directory exists
+
+        // Check if running as root (POSIX may be unavailable on some builds)
+        $this->isRoot = function_exists('posix_geteuid') ? (posix_geteuid() === 0) : false;
+
+        // Make sure the required database tables exist before we run any queries
+        $this->ensureDatabaseSchema();
+
+        // Ensure share base directory exists (best-effort – skip if we cannot create it)
         if (!is_dir($this->shareBasePath)) {
-            mkdir($this->shareBasePath, 0755, true);
+            if (!@mkdir($this->shareBasePath, 0755, true) && !is_dir($this->shareBasePath)) {
+                error_log("Share: failed to create base directory {$this->shareBasePath}");
+            }
         }
     }
 
@@ -26,6 +32,108 @@ class Share {
      */
     private function getSudoPrefix() {
         return $this->isRoot ? '' : 'sudo ';
+    }
+
+    /**
+     * Ensure the shares feature has the necessary database schema.
+     * This runs only once per request to avoid redundant checks.
+     */
+    private function ensureDatabaseSchema() {
+        if (self::$schemaEnsured) {
+            return;
+        }
+
+        $connection = $this->db->getConnection();
+
+        $statements = [
+            'shares' => "
+                CREATE TABLE IF NOT EXISTS shares (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    share_name VARCHAR(100) NOT NULL UNIQUE,
+                    display_name VARCHAR(100),
+                    path VARCHAR(500) NOT NULL,
+                    comment TEXT,
+                    browseable BOOLEAN DEFAULT TRUE,
+                    readonly BOOLEAN DEFAULT FALSE,
+                    guest_ok BOOLEAN DEFAULT FALSE,
+                    case_sensitive ENUM('auto', 'yes', 'no') DEFAULT 'auto',
+                    preserve_case BOOLEAN DEFAULT TRUE,
+                    short_preserve_case BOOLEAN DEFAULT TRUE,
+                    valid_users TEXT,
+                    write_list TEXT,
+                    read_list TEXT,
+                    admin_users TEXT,
+                    create_mask VARCHAR(10) DEFAULT '0664',
+                    directory_mask VARCHAR(10) DEFAULT '0775',
+                    force_user VARCHAR(50),
+                    force_group VARCHAR(50),
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_by INT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+                    INDEX idx_share_name (share_name),
+                    INDEX idx_is_active (is_active)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ",
+            'share_users' => "
+                CREATE TABLE IF NOT EXISTS share_users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(50) NOT NULL UNIQUE,
+                    full_name VARCHAR(100),
+                    password_hash VARCHAR(255),
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_by INT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+                    INDEX idx_username (username),
+                    INDEX idx_is_active (is_active)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ",
+            'share_permissions' => "
+                CREATE TABLE IF NOT EXISTS share_permissions (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    share_id INT NOT NULL,
+                    share_user_id INT NOT NULL,
+                    permission_level ENUM('read', 'write', 'admin') DEFAULT 'read',
+                    created_by INT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (share_id) REFERENCES shares(id) ON DELETE CASCADE,
+                    FOREIGN KEY (share_user_id) REFERENCES share_users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+                    UNIQUE KEY unique_share_user (share_id, share_user_id),
+                    INDEX idx_share_id (share_id),
+                    INDEX idx_share_user_id (share_user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ",
+            'share_access_log' => "
+                CREATE TABLE IF NOT EXISTS share_access_log (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    share_id INT,
+                    username VARCHAR(50),
+                    action VARCHAR(50),
+                    ip_address VARCHAR(45),
+                    details TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (share_id) REFERENCES shares(id) ON DELETE CASCADE,
+                    INDEX idx_share_id (share_id),
+                    INDEX idx_username (username),
+                    INDEX idx_created (created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            "
+        ];
+
+        foreach ($statements as $table => $sql) {
+            try {
+                $connection->exec($sql);
+            } catch (\PDOException $e) {
+                throw new Exception("Failed to ensure {$table} table exists: " . $e->getMessage(), 0, $e);
+            }
+        }
+
+        self::$schemaEnsured = true;
     }
 
     // ============ Share Management ============
@@ -848,22 +956,31 @@ class Share {
      * Get share access logs
      */
     public function getAccessLogs($shareId = null, $limit = 100) {
-        if ($shareId) {
+        $shareId = $shareId !== null ? (int)$shareId : null;
+        $limit = (int)$limit;
+
+        if ($limit <= 0) {
+            $limit = 100;
+        }
+        if ($limit > 500) {
+            $limit = 500;
+        }
+
+        if ($shareId !== null) {
             $sql = "SELECT sal.*, s.share_name 
                     FROM share_access_log sal
                     JOIN shares s ON sal.share_id = s.id
                     WHERE sal.share_id = ?
                     ORDER BY sal.created_at DESC
-                    LIMIT ?";
-            return $this->db->fetchAll($sql, [$shareId, $limit]);
-        } else {
-            $sql = "SELECT sal.*, s.share_name 
-                    FROM share_access_log sal
-                    LEFT JOIN shares s ON sal.share_id = s.id
-                    ORDER BY sal.created_at DESC
-                    LIMIT ?";
-            return $this->db->fetchAll($sql, [$limit]);
+                    LIMIT {$limit}";
+            return $this->db->fetchAll($sql, [$shareId]);
         }
+
+        $sql = "SELECT sal.*, s.share_name 
+                FROM share_access_log sal
+                LEFT JOIN shares s ON sal.share_id = s.id
+                ORDER BY sal.created_at DESC
+                LIMIT {$limit}";
+        return $this->db->fetchAll($sql);
     }
 }
-

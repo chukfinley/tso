@@ -85,6 +85,32 @@ try {
             ]);
             break;
 
+        case 'log_error':
+            // Allow client-side to log errors
+            $input = json_decode(file_get_contents('php://input'), true);
+            if (!$input || !isset($input['message'])) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'Invalid input']);
+                exit;
+            }
+            
+            $level = $input['level'] ?? 'error';
+            $message = $input['message'];
+            $context = $input['context'] ?? [];
+            
+            // Add client-side specific context
+            $context['source'] = 'client-side';
+            $context['user_agent'] = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
+            $context['referer'] = $_SERVER['HTTP_REFERER'] ?? 'unknown';
+            
+            $logger->log($level, $message, $context);
+            
+            echo json_encode([
+                'success' => true,
+                'message' => 'Error logged successfully'
+            ]);
+            break;
+
         default:
             http_response_code(400);
             echo json_encode(['success' => false, 'error' => 'Invalid action']);
