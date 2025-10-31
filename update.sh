@@ -81,6 +81,12 @@ clone_latest() {
 
 update_files() {
     print_info "Updating application files..."
+    
+    # Remove .git directory if it exists (causes ownership issues)
+    if [ -d "${INSTALL_DIR}/.git" ]; then
+        print_info "Removing git repository (causes ownership conflicts)..."
+        rm -rf "${INSTALL_DIR}/.git"
+    fi
 
     # Update main directories
     cp -r "${TEMP_DIR}/public" ${INSTALL_DIR}/ 2>/dev/null || true
@@ -88,9 +94,14 @@ update_files() {
     cp -r "${TEMP_DIR}/views" ${INSTALL_DIR}/ 2>/dev/null || true
     cp -r "${TEMP_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
     cp -r "${TEMP_DIR}/scripts" ${INSTALL_DIR}/ 2>/dev/null || true
+    cp -r "${TEMP_DIR}/config" ${INSTALL_DIR}/ 2>/dev/null || true
 
-    # Update init.sql
+    # Update init.sql and scripts
     cp "${TEMP_DIR}/init.sql" ${INSTALL_DIR}/ 2>/dev/null || true
+    cp "${TEMP_DIR}/update.sh" ${INSTALL_DIR}/ 2>/dev/null || true
+    cp "${TEMP_DIR}/bootstrap.sh" ${INSTALL_DIR}/ 2>/dev/null || true
+    chmod +x ${INSTALL_DIR}/update.sh 2>/dev/null || true
+    chmod +x ${INSTALL_DIR}/bootstrap.sh 2>/dev/null || true
 
     print_success "Application files updated"
 }
@@ -169,6 +180,7 @@ show_completion() {
     echo ""
     print_info "What was updated:"
     echo "  ✓ Application files (PHP, HTML, CSS, JS)"
+    echo "  ✓ Monitoring system"
     echo "  ✓ Tools and utilities"
     echo "  ✓ Database schema file"
     echo ""
@@ -179,6 +191,10 @@ show_completion() {
     echo ""
     IP_ADDRESS=$(hostname -I | awk '{print $1}')
     echo "Access your ServerOS at: ${GREEN}http://${IP_ADDRESS}${NC}"
+    echo ""
+    print_info "To update in the future:"
+    echo "  • Use the web UI: Settings → System Update"
+    echo "  • Or run: sudo bash ${INSTALL_DIR}/update.sh"
     echo ""
 }
 
