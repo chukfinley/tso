@@ -154,6 +154,7 @@ install_dependencies() {
     # Install packages
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
         apache2 \
+        libapache2-mod-ssl \
         mariadb-server \
         php \
         php-mysql \
@@ -722,12 +723,46 @@ restart_services() {
     verify_service "apache2" "Apache2"
     
     # Verify SSL is working by checking if SSL module is loaded
+    # First, ensure the SSL module package is installed
+    if ! dpkg -l | grep -q "^ii.*libapache2-mod-ssl"; then
+        print_info "Installing Apache SSL module package..."
+        run_command \
+            "apt-get install -y -qq libapache2-mod-ssl 2>&1" \
+            "Install Apache SSL module package" \
+            "false"
+        
+        # Enable SSL module after installation
+        run_command \
+            "a2enmod ssl 2>&1" \
+            "Enable Apache SSL module" \
+            "false"
+        
+        # Restart Apache again to load the newly installed module
+        run_command \
+            "systemctl restart apache2 2>&1" \
+            "Restart Apache to load SSL module" \
+            "false"
+        
+        # Wait a moment for Apache to fully restart
+        sleep 2
+    fi
+    
+    # Check if SSL module is loaded
     if apache2ctl -M 2>/dev/null | grep -q ssl_module; then
         print_success "Apache SSL module is loaded"
     else
         print_warning "Apache SSL module may not be loaded - HTTPS may not work"
         echo "Checking Apache configuration..."
         apache2ctl -M 2>&1 | grep -i ssl || true
+        print_info "Attempting to enable SSL module..."
+        a2enmod ssl 2>&1 || true
+        systemctl restart apache2 2>&1 || true
+        sleep 2
+        if apache2ctl -M 2>/dev/null | grep -q ssl_module; then
+            print_success "Apache SSL module is now loaded"
+        else
+            print_warning "SSL module still not loaded - please check Apache configuration manually"
+        fi
     fi
     
     print_success "Services restarted and verified"
