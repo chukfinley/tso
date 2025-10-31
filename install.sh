@@ -449,24 +449,19 @@ perform_update() {
     cp ${INSTALL_DIR}/config/config.php /tmp/serveros-config-backup.php
     print_success "Configuration backed up"
 
-    # Check if installation is a git repository
-    if [[ -d "${INSTALL_DIR}/.git" ]]; then
-        print_info "Git repository detected - pulling latest changes..."
-        cd ${INSTALL_DIR}
-        git pull origin master > /dev/null 2>&1 || git pull origin main > /dev/null 2>&1
-        print_success "Latest changes pulled from git"
-    else
-        print_info "No git repository - fetching latest version..."
-        # Deploy new files (will overwrite application files but not config)
-        SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-        cp -r "${SCRIPT_DIR}/public" ${INSTALL_DIR}/ 2>/dev/null || true
-        cp -r "${SCRIPT_DIR}/src" ${INSTALL_DIR}/ 2>/dev/null || true
-        cp -r "${SCRIPT_DIR}/views" ${INSTALL_DIR}/ 2>/dev/null || true
-        cp -r "${SCRIPT_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
-        cp -r "${SCRIPT_DIR}/scripts" ${INSTALL_DIR}/ 2>/dev/null || true
-        cp "${SCRIPT_DIR}/init.sql" ${INSTALL_DIR}/ 2>/dev/null || true
-        print_success "Application files updated"
-    fi
+    # Deploy new files (will overwrite application files but not config)
+    print_info "Updating application files..."
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    
+    # Copy all application files from source to installation directory
+    cp -r "${SCRIPT_DIR}/public" ${INSTALL_DIR}/ 2>/dev/null || true
+    cp -r "${SCRIPT_DIR}/src" ${INSTALL_DIR}/ 2>/dev/null || true
+    cp -r "${SCRIPT_DIR}/views" ${INSTALL_DIR}/ 2>/dev/null || true
+    cp -r "${SCRIPT_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
+    cp -r "${SCRIPT_DIR}/scripts" ${INSTALL_DIR}/ 2>/dev/null || true
+    cp "${SCRIPT_DIR}/init.sql" ${INSTALL_DIR}/ 2>/dev/null || true
+    
+    print_success "Application files updated"
 
     # Restore config
     print_info "Restoring configuration..."
