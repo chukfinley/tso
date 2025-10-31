@@ -49,3 +49,52 @@ CREATE TABLE IF NOT EXISTS activity_log (
     INDEX idx_action (action),
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Virtual Machines Table
+CREATE TABLE IF NOT EXISTS virtual_machines (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    uuid VARCHAR(36) UNIQUE NOT NULL,
+
+    -- Hardware Configuration
+    cpu_cores INT DEFAULT 2,
+    ram_mb INT DEFAULT 2048,
+
+    -- Disk Configuration
+    disk_path VARCHAR(255),
+    disk_size_gb INT DEFAULT 20,
+    disk_format ENUM('qcow2', 'raw', 'vmdk') DEFAULT 'qcow2',
+
+    -- Boot Configuration
+    boot_order VARCHAR(50) DEFAULT 'cd,hd',
+    iso_path VARCHAR(255),
+    boot_from_disk BOOLEAN DEFAULT FALSE,
+    physical_disk_device VARCHAR(50),
+
+    -- Network Configuration
+    network_mode ENUM('nat', 'bridge', 'user', 'none') DEFAULT 'nat',
+    network_bridge VARCHAR(50),
+    mac_address VARCHAR(17),
+
+    -- Display Configuration
+    display_type ENUM('spice', 'vnc', 'none') DEFAULT 'spice',
+    spice_port INT,
+    vnc_port INT,
+    spice_password VARCHAR(50),
+
+    -- Status
+    status ENUM('stopped', 'running', 'paused', 'error') DEFAULT 'stopped',
+    pid INT,
+
+    -- Metadata
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    last_started_at TIMESTAMP NULL,
+
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_name (name),
+    INDEX idx_status (status),
+    INDEX idx_uuid (uuid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
