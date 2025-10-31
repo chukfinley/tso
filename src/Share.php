@@ -562,6 +562,13 @@ class Share {
         $tempFile = '/tmp/smb.conf.' . uniqid();
         file_put_contents($tempFile, $shareConfig);
         
+        // Ensure /etc/samba directory exists
+        $sambaDir = dirname($this->sambaConfPath);
+        exec("sudo mkdir -p $sambaDir 2>&1", $output, $returnCode);
+        if ($returnCode !== 0) {
+            throw new Exception("Failed to create Samba directory: " . implode("\n", $output));
+        }
+        
         // Move to actual location with sudo
         exec("sudo mv $tempFile {$this->sambaConfPath} 2>&1", $output, $returnCode);
         
