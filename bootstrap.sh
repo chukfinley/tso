@@ -104,6 +104,14 @@ clone_repository() {
     fi
 }
 
+check_existing_installation() {
+    if [[ -d "${INSTALL_DIR}" ]] && [[ -f "${INSTALL_DIR}/config/config.php" ]]; then
+        return 0  # Installation exists
+    else
+        return 1  # New installation
+    fi
+}
+
 run_installer() {
     print_info "Running ServerOS installer..."
     echo ""
@@ -125,15 +133,27 @@ cleanup() {
 
 show_success() {
     echo ""
-    echo -e "${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║            Bootstrap Installation Complete!                    ║${NC}"
-    echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    print_success "ServerOS has been installed successfully!"
-    echo ""
-    print_info "Check the output above for access credentials"
-    print_info "Credentials also saved to: /root/serveros_credentials.txt"
-    echo ""
+    if [[ "$IS_UPDATE" == "true" ]]; then
+        echo -e "${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║                 Update Completed Successfully!                 ║${NC}"
+        echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        print_success "ServerOS has been updated to the latest version!"
+        echo ""
+        IP_ADDRESS=$(hostname -I | awk '{print $1}')
+        print_info "Access your ServerOS at: http://${IP_ADDRESS}"
+        echo ""
+    else
+        echo -e "${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${GREEN}║            Bootstrap Installation Complete!                    ║${NC}"
+        echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+        print_success "ServerOS has been installed successfully!"
+        echo ""
+        print_info "Check the output above for access credentials"
+        print_info "Credentials also saved to: /root/serveros_credentials.txt"
+        echo ""
+    fi
 }
 
 handle_error() {
@@ -161,6 +181,16 @@ main() {
     check_root
     check_os
     check_dependencies
+    
+    # Check if this is an update or fresh install
+    if check_existing_installation; then
+        IS_UPDATE="true"
+        print_info "Existing installation detected - will perform update"
+    else
+        IS_UPDATE="false"
+        print_info "No existing installation - will perform fresh install"
+    fi
+    echo ""
 
     # Clone and install
     clone_repository
