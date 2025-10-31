@@ -331,4 +331,3 @@ if (!headers_sent() && http_response_code() === false) {
         'error' => 'Fatal error occurred before error handling'
     ]);
 }
-
