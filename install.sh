@@ -155,19 +155,37 @@ deploy_files() {
     # Get script directory
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-    # Create installation directory
-    mkdir -p ${INSTALL_DIR}
+    # Check if we're in a git repository
+    if [[ -d "${SCRIPT_DIR}/.git" ]]; then
+        # We're in a git repo - clone it to installation directory
+        print_info "Cloning git repository to ${INSTALL_DIR}..."
 
-    # Copy files
-    print_info "Copying files to ${INSTALL_DIR}..."
+        # Remove old installation if exists
+        if [[ -d "${INSTALL_DIR}" ]]; then
+            rm -rf ${INSTALL_DIR}
+        fi
 
-    # Copy all directories and files
-    cp -r "${SCRIPT_DIR}/config" ${INSTALL_DIR}/ 2>/dev/null || true
-    cp -r "${SCRIPT_DIR}/public" ${INSTALL_DIR}/ 2>/dev/null || true
-    cp -r "${SCRIPT_DIR}/src" ${INSTALL_DIR}/ 2>/dev/null || true
-    cp -r "${SCRIPT_DIR}/views" ${INSTALL_DIR}/ 2>/dev/null || true
-    cp -r "${SCRIPT_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
-    cp "${SCRIPT_DIR}/init.sql" ${INSTALL_DIR}/ 2>/dev/null || true
+        # Clone repository
+        git clone "${REPO_URL}" ${INSTALL_DIR} > /dev/null 2>&1
+
+        print_success "Git repository cloned"
+    else
+        # Not in git repo - copy files (fallback)
+        print_info "Copying files to ${INSTALL_DIR}..."
+
+        # Create installation directory
+        mkdir -p ${INSTALL_DIR}
+
+        # Copy all directories and files
+        cp -r "${SCRIPT_DIR}/config" ${INSTALL_DIR}/ 2>/dev/null || true
+        cp -r "${SCRIPT_DIR}/public" ${INSTALL_DIR}/ 2>/dev/null || true
+        cp -r "${SCRIPT_DIR}/src" ${INSTALL_DIR}/ 2>/dev/null || true
+        cp -r "${SCRIPT_DIR}/views" ${INSTALL_DIR}/ 2>/dev/null || true
+        cp -r "${SCRIPT_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
+        cp "${SCRIPT_DIR}/init.sql" ${INSTALL_DIR}/ 2>/dev/null || true
+
+        print_success "Files copied"
+    fi
 
     # Create logs and storage directories
     mkdir -p ${INSTALL_DIR}/logs
@@ -430,18 +448,29 @@ perform_update() {
     cp ${INSTALL_DIR}/config/config.php /tmp/serveros-config-backup.php
     print_success "Configuration backed up"
 
-    # Deploy new files (will overwrite application files but not config)
-    deploy_files
+    # Check if installation is a git repository
+    if [[ -d "${INSTALL_DIR}/.git" ]]; then
+        print_info "Git repository detected - pulling latest changes..."
+        cd ${INSTALL_DIR}
+        git pull origin master > /dev/null 2>&1 || git pull origin main > /dev/null 2>&1
+        print_success "Latest changes pulled from git"
+    else
+        print_info "No git repository - fetching latest version..."
+        # Deploy new files (will overwrite application files but not config)
+        SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+        cp -r "${SCRIPT_DIR}/public" ${INSTALL_DIR}/ 2>/dev/null || true
+        cp -r "${SCRIPT_DIR}/src" ${INSTALL_DIR}/ 2>/dev/null || true
+        cp -r "${SCRIPT_DIR}/views" ${INSTALL_DIR}/ 2>/dev/null || true
+        cp -r "${SCRIPT_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
+        cp "${SCRIPT_DIR}/init.sql" ${INSTALL_DIR}/ 2>/dev/null || true
+        print_success "Application files updated"
+    fi
 
     # Restore config
     print_info "Restoring configuration..."
     cp /tmp/serveros-config-backup.php ${INSTALL_DIR}/config/config.php
+    rm -f /tmp/serveros-config-backup.php
     print_success "Configuration restored"
-
-    # Copy tools (always update)
-    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    cp -r "${SCRIPT_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
-    print_success "Tools updated"
 
     # Ensure admin user exists with correct password
     create_admin_user
@@ -458,6 +487,9 @@ perform_update() {
     print_info "Configuration preserved from existing installation"
     print_info "Application files updated to latest version"
     print_info "Database and users unchanged"
+    echo ""
+    print_info "To update in the future, you can simply run:"
+    echo "  cd ${INSTALL_DIR} && sudo git pull && sudo ./post-update.sh"
     echo ""
 }
 

@@ -117,9 +117,33 @@ sudo /opt/serveros/update.sh
    git commit -m "Add feature X"
    git push
 
-   # Users can update with:
-   # curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash
+   # Users can update with ANY of these methods:
+   # Method 1: Git pull (fastest, on the server)
+   cd /opt/serveros
+   sudo git pull
+   sudo ./post-update.sh
+
+   # Method 2: Bootstrap script (works from anywhere)
+   curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash
+
+   # Method 3: Update script
+   sudo /opt/serveros/update.sh
    ```
+
+### 🚀 RECOMMENDED Update Method for Servers
+
+The **fastest** way to update on a server with ServerOS installed:
+
+```bash
+cd /opt/serveros && sudo git pull && sudo ./post-update.sh
+```
+
+This takes **seconds** instead of minutes because:
+- ✅ Only downloads changed files (not full clone)
+- ✅ No temporary directories
+- ✅ Direct update in place
+- ✅ Config is ignored by git (.gitignore)
+- ✅ post-update.sh fixes permissions and restarts services
 
 2. **For Database Schema Changes**:
    ```bash

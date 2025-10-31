@@ -6,6 +6,9 @@ node_modules/
 .env
 .env.local
 
+# Configuration (production)
+config/config.php
+
 # Logs and storage
 logs/
 storage/
@@ -25,3 +28,7 @@ Thumbs.db
 *.tmp
 *.temp
 *.cache
+
+# Backups
+*.bak
+*-backup.php

@@ -98,26 +98,39 @@ For detailed installation instructions, see [INSTALL.md](INSTALL.md)
 
 ## Updating ServerOS 🔄
 
-**Important:** You can simply re-run the installer to update!
+### Quick Update (Fastest!)
 
+On your server, simply run:
+
+```bash
+cd /opt/serveros && sudo git pull && sudo ./post-update.sh
+```
+
+**Takes 5 seconds!** Updates only changed files.
+
+### Alternative Methods
+
+Re-run the installer:
 ```bash
 curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash
 ```
 
-Or use the dedicated update script:
-
+Or use the update script:
 ```bash
 sudo /opt/serveros/update.sh
 ```
 
-**What happens during update:**
+### What Gets Updated
+
 - ✅ Application files updated to latest version
 - ✅ Tools and utilities updated
 - ✅ **Configuration preserved** (database credentials)
 - ✅ **Database and users preserved**
 - ✅ **Logs and storage preserved**
 
-No data loss! Your settings and users are safe.
+**No data loss!** Your settings and users are safe.
+
+For detailed update instructions, see [GIT-UPDATE.md](GIT-UPDATE.md)
 
 ## Manual Installation
 
