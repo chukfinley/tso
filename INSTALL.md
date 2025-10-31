@@ -2,18 +2,27 @@
 
 This guide will help you install ServerOS on a Debian-based system.
 
-## Quick Installation
+## Quick Installation (Recommended)
 
-The easiest way to install ServerOS is using the automated installation script:
+Install ServerOS with a single command:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/serveros.git
-cd serveros
+curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash
+```
 
-# Run the installer as root
+**That's it!** No need to clone the repository or install dependencies manually.
+
+### Alternative: Git Clone Method
+
+If you prefer to clone first:
+
+```bash
+git clone https://github.com/chukfinley/tso.git
+cd tso
 sudo ./install.sh
 ```
+
+### What the Installer Does
 
 The installer will:
 - ✓ Update your system

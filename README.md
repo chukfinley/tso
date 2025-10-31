@@ -1,6 +1,15 @@
-# ServerOS
+# ServerOS 🚀
 
 A Debian-based server management system inspired by Unraid and TrueNAS — built in pure PHP.
+
+**One-line Installation:**
+```bash
+curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash
+```
+
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Debian%20%7C%20Ubuntu-orange.svg)](https://debian.org)
+[![PHP](https://img.shields.io/badge/PHP-7.4%2B-777BB4.svg)](https://php.net)
 
 ## Features
 
@@ -61,18 +70,13 @@ A Debian-based server management system inspired by Unraid and TrueNAS — built
 
 ## Quick Installation ⚡
 
-The easiest way to install ServerOS is using our automated installation script:
+Install ServerOS with a single command:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/serveros.git
-cd serveros
-
-# Run the automated installer
-sudo ./install.sh
+curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash
 ```
 
-The installer will automatically:
+That's it! The installer will automatically:
 - ✓ Install Apache2, MariaDB, PHP and all dependencies
 - ✓ Create and configure the database
 - ✓ Deploy application files to `/opt/serveros`
@@ -81,6 +85,14 @@ The installer will automatically:
 - ✓ Start all services
 
 **Installation takes 5-10 minutes.** After completion, access the web interface at `http://YOUR_SERVER_IP`
+
+### Alternative: Git Clone Method
+
+```bash
+git clone https://github.com/chukfinley/tso.git
+cd tso
+sudo ./install.sh
+```
 
 For detailed installation instructions, see [INSTALL.md](INSTALL.md)
 
