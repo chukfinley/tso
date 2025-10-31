@@ -11,6 +11,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
         <li><a href="/docker.php" class="<?php echo $currentPage === 'docker' ? 'active' : ''; ?>">Docker</a></li>
         <li><a href="/vms.php" class="<?php echo $currentPage === 'vms' ? 'active' : ''; ?>">VMs</a></li>
         <li><a href="/plugins.php" class="<?php echo $currentPage === 'plugins' ? 'active' : ''; ?>">Plugins</a></li>
+        <li><a href="/logs.php" class="<?php echo $currentPage === 'logs' ? 'active' : ''; ?>">Logs</a></li>
         <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
         <li><a href="/terminal.php" class="<?php echo $currentPage === 'terminal' ? 'active' : ''; ?>">Terminal</a></li>
         <?php endif; ?>

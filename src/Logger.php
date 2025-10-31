@@ -72,8 +72,9 @@ class Logger {
 
     /**
      * Main logging method
+     * Public so ErrorHandler can access it
      */
-    private function log($level, $message, $context = [], $userId = null) {
+    public function log($level, $message, $context = [], $userId = null) {
         $timestamp = date('Y-m-d H:i:s');
         $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
         

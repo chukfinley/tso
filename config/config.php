@@ -29,7 +29,19 @@ date_default_timezone_set('Europe/Berlin');
 
 // Error Reporting (disable in production)
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0); // Changed to 0 for production - errors will be logged
+ini_set('log_errors', 1);
 
 // Start session
 session_start();
+
+// Initialize error handler after paths are defined
+// This must be after session_start() because Logger may need session info
+try {
+    require_once SRC_PATH . '/Database.php';
+    require_once SRC_PATH . '/ErrorHandler.php';
+    ErrorHandler::init();
+} catch (Exception $e) {
+    // If error handler can't be initialized, fall back to default PHP error handling
+    error_log("Failed to initialize error handler: " . $e->getMessage());
+}

@@ -586,23 +586,123 @@ set_permissions() {
 configure_sudo() {
     print_info "Configuring sudo permissions..."
 
+    local sudoers_copied=0
+    local sudoers_errors=0
+
     # Copy main sudoers file
-    if [ -f "${INSTALL_DIR}/config/serveros-sudoers" ]; then
-        cp "${INSTALL_DIR}/config/serveros-sudoers" /etc/sudoers.d/serveros
-        chmod 0440 /etc/sudoers.d/serveros
+    local main_sudoers_source="${INSTALL_DIR}/config/serveros-sudoers"
+    local main_sudoers_dest="/etc/sudoers.d/serveros"
+    
+    if [ -f "${main_sudoers_source}" ]; then
+        print_info "Installing main sudoers configuration..."
+        run_command \
+            "cp '${main_sudoers_source}' '${main_sudoers_dest}' 2>&1" \
+            "Copy main sudoers file" \
+            "false"
+        
+        if [ $? -eq 0 ]; then
+            run_command \
+                "chmod 0440 '${main_sudoers_dest}' 2>&1" \
+                "Set sudoers file permissions" \
+                "false"
+            
+            # Validate sudoers file
+            if visudo -c -f "${main_sudoers_dest}" > /dev/null 2>&1; then
+                print_success "Main sudoers configuration installed and validated"
+                sudoers_copied=$((sudoers_copied + 1))
+            else
+                print_warning "Main sudoers file copied but validation failed"
+                echo "  Attempting to validate sudoers configuration..."
+                visudo -c -f "${main_sudoers_dest}" 2>&1 | head -5 || true
+                sudoers_errors=$((sudoers_errors + 1))
+            fi
+        else
+            sudoers_errors=$((sudoers_errors + 1))
+        fi
     else
-        print_warning "Main sudoers config not found"
+        print_warning "Main sudoers config file not found"
+        echo ""
+        echo -e "${YELLOW}  Expected location:${NC} ${main_sudoers_source}"
+        echo -e "${YELLOW}  This file allows the web server to run update scripts${NC}"
+        echo -e "${YELLOW}  If needed, you can manually create it at: ${main_sudoers_dest}${NC}"
+        echo ""
+        sudoers_errors=$((sudoers_errors + 1))
     fi
 
     # Copy Samba sudoers file
-    if [ -f "${INSTALL_DIR}/config/samba-sudoers" ]; then
-        cp "${INSTALL_DIR}/config/samba-sudoers" /etc/sudoers.d/serveros-samba
-        chmod 0440 /etc/sudoers.d/serveros-samba
+    local samba_sudoers_source="${INSTALL_DIR}/config/samba-sudoers"
+    local samba_sudoers_dest="/etc/sudoers.d/serveros-samba"
+    
+    if [ -f "${samba_sudoers_source}" ]; then
+        print_info "Installing Samba sudoers configuration..."
+        
+        # Detect web server user (www-data, apache, nginx)
+        local web_user="www-data"
+        if id "apache" &>/dev/null; then
+            web_user="apache"
+        elif id "nginx" &>/dev/null; then
+            web_user="nginx"
+        fi
+        
+        # Create temporary file with web user substitution
+        local temp_sudoers="/tmp/serveros-samba-sudoers.$$"
+        sed "s/www-data/${web_user}/g" "${samba_sudoers_source}" > "${temp_sudoers}"
+        
+        run_command \
+            "cp '${temp_sudoers}' '${samba_sudoers_dest}' 2>&1" \
+            "Copy Samba sudoers file" \
+            "false"
+        
+        if [ $? -eq 0 ]; then
+            run_command \
+                "chmod 0440 '${samba_sudoers_dest}' 2>&1" \
+                "Set Samba sudoers file permissions" \
+                "false"
+            
+            # Clean up temp file
+            rm -f "${temp_sudoers}"
+            
+            # Validate sudoers file
+            if visudo -c -f "${samba_sudoers_dest}" > /dev/null 2>&1; then
+                print_success "Samba sudoers configuration installed and validated (web user: ${web_user})"
+                sudoers_copied=$((sudoers_copied + 1))
+            else
+                print_warning "Samba sudoers file copied but validation failed"
+                echo "  Attempting to validate sudoers configuration..."
+                visudo -c -f "${samba_sudoers_dest}" 2>&1 | head -5 || true
+                sudoers_errors=$((sudoers_errors + 1))
+            fi
+        else
+            sudoers_errors=$((sudoers_errors + 1))
+            rm -f "${temp_sudoers}"
+        fi
     else
-        print_warning "Samba sudoers config not found"
+        print_warning "Samba sudoers config file not found"
+        echo ""
+        echo -e "${YELLOW}  Expected location:${NC} ${samba_sudoers_source}"
+        echo -e "${YELLOW}  This file allows the web server to manage Samba shares${NC}"
+        echo -e "${YELLOW}  Without this file, Samba share management may not work properly${NC}"
+        echo -e "${YELLOW}  If needed, you can manually create it at: ${samba_sudoers_dest}${NC}"
+        echo ""
+        sudoers_errors=$((sudoers_errors + 1))
     fi
 
-    print_success "Sudo permissions configured"
+    # Summary
+    if [ $sudoers_copied -gt 0 ]; then
+        if [ $sudoers_errors -eq 0 ]; then
+            print_success "All sudo permissions configured successfully ($sudoers_copied file(s))"
+        else
+            print_warning "Some sudo permissions configured, but $sudoers_errors file(s) had issues"
+        fi
+    else
+        print_warning "No sudoers files were installed - some features may not work"
+        echo ""
+        echo -e "${YELLOW}  To manually install sudoers files:${NC}"
+        echo "    1. Copy files from ${INSTALL_DIR}/config/ to /etc/sudoers.d/"
+        echo "    2. Set permissions: chmod 0440 /etc/sudoers.d/serveros*"
+        echo "    3. Validate: visudo -c"
+        echo ""
+    fi
 }
 
 restart_services() {
@@ -759,6 +859,19 @@ perform_update() {
     cp -r "${SCRIPT_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
     cp -r "${SCRIPT_DIR}/scripts" ${INSTALL_DIR}/ 2>/dev/null || true
     cp "${SCRIPT_DIR}/init.sql" ${INSTALL_DIR}/ 2>/dev/null || true
+    
+    # Copy config directory but preserve existing config.php
+    # This ensures sudoers files and other config templates are updated
+    print_info "Updating config templates..."
+    if [ -f "${SCRIPT_DIR}/config/serveros-sudoers" ]; then
+        cp "${SCRIPT_DIR}/config/serveros-sudoers" ${INSTALL_DIR}/config/ 2>/dev/null || true
+    fi
+    if [ -f "${SCRIPT_DIR}/config/samba-sudoers" ]; then
+        cp "${SCRIPT_DIR}/config/samba-sudoers" ${INSTALL_DIR}/config/ 2>/dev/null || true
+    fi
+    if [ -f "${SCRIPT_DIR}/config/config.example.php" ]; then
+        cp "${SCRIPT_DIR}/config/config.example.php" ${INSTALL_DIR}/config/ 2>/dev/null || true
+    fi
     
     print_success "Application files updated"
 
