@@ -180,6 +180,18 @@ import_schema() {
     fi
 }
 
+run_database_migrations() {
+    print_info "Running database migrations..."
+
+    # Run migration script if it exists
+    if [[ -f "${INSTALL_DIR}/tools/migrate-database.php" ]]; then
+        php ${INSTALL_DIR}/tools/migrate-database.php
+        print_success "Database migrations completed"
+    else
+        print_warning "Migration script not found, skipping..."
+    fi
+}
+
 deploy_files() {
     print_info "Deploying application files..."
 
@@ -522,9 +534,12 @@ perform_update() {
     # Ensure admin user exists with correct password
     create_admin_user
 
+    # Run database migrations
+    run_database_migrations
+
     # Update permissions
     set_permissions
-    
+
     # Configure sudo permissions
     configure_sudo
 
@@ -601,6 +616,7 @@ main() {
         deploy_files
         configure_app
         create_admin_user
+        run_database_migrations
         configure_apache
         set_permissions
         configure_sudo
