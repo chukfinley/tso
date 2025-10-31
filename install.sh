@@ -556,6 +556,13 @@ main() {
         set_permissions
         configure_firewall
         restart_services
+        
+        # Install monitoring system
+        if [ -f "$SCRIPT_DIR/scripts/install-monitoring.sh" ]; then
+            echo ""
+            echo "Installing monitoring system..."
+            bash "$SCRIPT_DIR/scripts/install-monitoring.sh"
+        fi
 
         # Show completion info
         show_completion_info

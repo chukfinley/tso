@@ -87,6 +87,7 @@ update_files() {
     cp -r "${TEMP_DIR}/src" ${INSTALL_DIR}/ 2>/dev/null || true
     cp -r "${TEMP_DIR}/views" ${INSTALL_DIR}/ 2>/dev/null || true
     cp -r "${TEMP_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
+    cp -r "${TEMP_DIR}/scripts" ${INSTALL_DIR}/ 2>/dev/null || true
 
     # Update init.sql
     cp "${TEMP_DIR}/init.sql" ${INSTALL_DIR}/ 2>/dev/null || true
@@ -195,6 +196,13 @@ main() {
     clone_latest
     update_files
     restore_config
+    
+    # Update monitoring system
+    if [ -f "${INSTALL_DIR}/scripts/install-monitoring.sh" ]; then
+        print_info "Updating monitoring system..."
+        bash "${INSTALL_DIR}/scripts/install-monitoring.sh"
+    fi
+    
     fix_permissions
     ensure_admin
     restart_services
