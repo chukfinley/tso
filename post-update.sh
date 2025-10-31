@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ################################################################################
-# ServerOS Post-Update Script
+# TSO Post-Update Script
 # Run this after 'git pull' to apply changes
 #
 # Usage:
@@ -47,7 +47,7 @@ fi
 
 echo ""
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║              ServerOS Post-Update Tasks                        ║${NC}"
+echo -e "${BLUE}║                TSO Post-Update Tasks                           ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -127,7 +127,7 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║                Post-Update Complete!                           ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-print_success "ServerOS has been updated successfully!"
+print_success "TSO has been updated successfully!"
 echo ""
 print_info "What was done:"
 echo "  ✓ Configuration preserved"
@@ -136,5 +136,5 @@ echo "  ✓ Admin user verified"
 echo "  ✓ Apache restarted"
 echo ""
 IP_ADDRESS=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "localhost")
-echo -e "Access ServerOS at: ${GREEN}http://${IP_ADDRESS}${NC}"
+echo -e "Access TSO at: ${GREEN}http://${IP_ADDRESS}${NC}"
 echo ""

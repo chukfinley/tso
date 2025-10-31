@@ -1,6 +1,6 @@
-# ServerOS Uninstallation Guide
+# TSO Uninstallation Guide
 
-How to safely remove ServerOS from your system.
+How to safely remove TSO from your system.
 
 ## Quick Uninstall
 
@@ -126,7 +126,7 @@ The script will:
 ║              Uninstallation Completed!                         ║
 ╚════════════════════════════════════════════════════════════════╝
 
-✓ ServerOS has been completely removed from your system.
+✓ TSO has been completely removed from your system.
 
 ℹ Database backup: /root/serveros_db_backup_20241031_120000.sql
 ℹ Credentials backup: /root/serveros_credentials.txt.bak
@@ -156,7 +156,7 @@ The installer will detect the existing database and use it!
 
 ## Removing System Packages
 
-ServerOS uninstaller does NOT remove Apache, MariaDB, or PHP.
+TSO uninstaller does NOT remove Apache, MariaDB, or PHP.
 
 To remove them manually:
 
@@ -174,7 +174,7 @@ sudo rm -rf /etc/mysql
 sudo rm -rf /var/lib/mysql  # ⚠️ Removes ALL databases!
 ```
 
-**Warning:** This removes ALL MySQL/MariaDB databases, not just ServerOS!
+**Warning:** This removes ALL MySQL/MariaDB databases, not just TSO!
 
 ## Partial Uninstall
 
@@ -251,7 +251,7 @@ sudo systemctl restart apache2
 
 ## Verify Uninstallation
 
-Check that ServerOS is completely removed:
+Check that TSO is completely removed:
 
 ```bash
 # Check files
@@ -339,7 +339,7 @@ curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh |
 
 ### Will Apache/MySQL be removed?
 
-No, only ServerOS files. You need to manually remove packages if desired.
+No, only TSO files. You need to manually remove packages if desired.
 
 ### Can I cancel during uninstall?
 

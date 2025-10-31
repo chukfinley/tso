@@ -1,5 +1,5 @@
 /**
- * ServerOS - Main JavaScript
+ * TSO - Main JavaScript
  */
 
 // Auto-hide alerts after 5 seconds

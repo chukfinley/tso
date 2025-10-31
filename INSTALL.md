@@ -1,10 +1,10 @@
-# ServerOS - Installation Guide
+# TSO - Installation Guide
 
-This guide will help you install ServerOS on a Debian-based system.
+This guide will help you install TSO on a Debian-based system.
 
 ## Quick Installation (Recommended)
 
-Install ServerOS with a single command:
+Install TSO with a single command:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash
@@ -44,7 +44,7 @@ The entire installation process takes approximately **5-10 minutes** depending o
 
 **Good news:** The installer can update existing installations!
 
-If you already have ServerOS installed and want to update to the latest version:
+If you already have TSO installed and want to update to the latest version:
 
 ```bash
 # Method 1: Re-run the bootstrap (recommended)
@@ -222,7 +222,7 @@ If you prefer to install manually, follow the detailed steps in [README.md](READ
 
 ## Uninstallation
 
-To completely remove ServerOS:
+To completely remove TSO:
 
 ```bash
 cd serveros
@@ -237,7 +237,7 @@ This will:
 
 ## Updating
 
-To update ServerOS to the latest version:
+To update TSO to the latest version:
 
 ```bash
 cd serveros
@@ -281,4 +281,4 @@ After successful installation:
 4. ✓ Create additional users
 5. ✓ Start configuring your system modules
 
-Welcome to ServerOS! 🚀
+Welcome to TSO! 🚀

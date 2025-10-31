@@ -43,7 +43,7 @@ $pageTitle = 'Login';
 <body>
     <div class="login-container">
         <div class="login-box">
-            <h1>ServerOS</h1>
+            <h1>TSO</h1>
             <p>Server Management System</p>
 
             <?php if ($error): ?>

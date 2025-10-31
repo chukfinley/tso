@@ -10,7 +10,7 @@ define('DB_USER', 'root');
 define('DB_PASS', '');
 
 // Application Settings
-define('APP_NAME', 'ServerOS');
+define('APP_NAME', 'TSO');
 define('APP_VERSION', '1.0.0');
 define('BASE_URL', 'http://localhost');
 

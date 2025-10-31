@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ################################################################################
-# ServerOS Quick Start Script (Development Mode)
+# TSO Quick Start Script (Development Mode)
 # For testing on localhost without full installation
 ################################################################################
 
@@ -27,7 +27,7 @@ print_warning() {
 
 echo -e "${BLUE}"
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║         ServerOS Quick Start (Development Mode)               ║"
+echo "║         TSO Quick Start (Development Mode)               ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 

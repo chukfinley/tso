@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ################################################################################
-# ServerOS Uninstallation Script
+# TSO Uninstallation Script
 ################################################################################
 
 set -e
@@ -23,7 +23,7 @@ KEEP_DATABASE=false
 print_header() {
     echo -e "${BLUE}"
     echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║                  ServerOS Uninstaller                          ║"
+    echo "║                    TSO Uninstaller                             ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
@@ -59,7 +59,7 @@ confirm_uninstall() {
     fi
 
     echo ""
-    print_warning "This will remove ServerOS from your system!"
+    print_warning "This will remove TSO from your system!"
     echo ""
     echo "What would you like to do?"
     echo "  1) Remove everything (app files + database)"
@@ -178,9 +178,9 @@ show_completion() {
     echo ""
 
     if [[ "$KEEP_DATABASE" == true ]]; then
-        print_success "ServerOS application files removed (database preserved)"
+        print_success "TSO application files removed (database preserved)"
     else
-        print_success "ServerOS has been completely removed from your system."
+        print_success "TSO has been completely removed from your system."
     fi
 
     echo ""
@@ -208,7 +208,7 @@ show_completion() {
 
     if [[ "$KEEP_DATABASE" == true ]]; then
         echo ""
-        print_info "To reinstall ServerOS with existing database:"
+        print_info "To reinstall TSO with existing database:"
         echo "  curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash"
         echo ""
     fi

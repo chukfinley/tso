@@ -1,4 +1,4 @@
-# ServerOS - Allow web server to run update script
+# TSO - Allow web server to run update script
 # This file should be copied to /etc/sudoers.d/serveros
 
 # Allow www-data to run update script without password

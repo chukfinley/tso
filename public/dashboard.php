@@ -355,4 +355,319 @@ $motherboard = getMotherboardInfo();
     </div>
 </div>
 
+<!-- Auto-refresh Status Indicator -->
+<div style="position: fixed; bottom: 20px; right: 20px; background: rgba(26, 26, 26, 0.95); border: 1px solid #333; border-radius: 8px; padding: 12px 20px; display: flex; align-items: center; gap: 12px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+    <div id="refresh-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: #4caf50; animation: pulse 2s infinite;"></div>
+    <div style="color: #b0b0b0; font-size: 13px;">
+        <span style="color: #fff; font-weight: 600;">Live:</span>
+        <span id="last-update">Just now</span>
+    </div>
+</div>
+
+<style>
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(0.8);
+    }
+}
+
+.progress-bar {
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.stat-value, .progress-text {
+    transition: color 0.2s ease;
+}
+
+.updating {
+    animation: fadeUpdate 0.3s ease;
+}
+
+@keyframes fadeUpdate {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+</style>
+
+<script>
+let refreshInterval;
+let lastUpdateTime = Date.now();
+let isPageVisible = true;
+
+// Track page visibility
+document.addEventListener('visibilitychange', function() {
+    isPageVisible = !document.hidden;
+    if (isPageVisible) {
+        // Resume updates when page becomes visible
+        if (!refreshInterval) {
+            startAutoRefresh();
+        }
+    }
+});
+
+function updateSystemStats() {
+    fetch('/api/system-stats.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.cpu) {
+                updateCpuStats(data.cpu);
+            }
+            if (data.memory) {
+                updateMemoryStats(data.memory);
+            }
+            if (data.swap) {
+                updateSwapStats(data.swap);
+            }
+            if (data.uptime) {
+                updateUptime(data.uptime);
+            }
+            if (data.network) {
+                updateNetworkInterfaces(data.network);
+            }
+
+            // Update timestamp
+            lastUpdateTime = Date.now();
+            updateLastUpdateText();
+
+            // Flash indicator
+            flashRefreshIndicator();
+        })
+        .catch(error => {
+            console.error('Error fetching system stats:', error);
+            document.getElementById('refresh-indicator').style.background = '#f44336';
+        });
+}
+
+function updateCpuStats(cpu) {
+    // Update CPU usage
+    const cpuUsageBar = document.getElementById('cpu-usage-bar');
+    const cpuUsageText = document.getElementById('cpu-usage-text');
+
+    if (cpuUsageBar && cpuUsageText) {
+        cpuUsageBar.style.width = cpu.usage + '%';
+        cpuUsageText.textContent = cpu.usage + '%';
+
+        // Update color based on usage
+        cpuUsageBar.className = 'progress-bar';
+        if (cpu.usage > 80) {
+            cpuUsageBar.classList.add('danger');
+        } else if (cpu.usage > 60) {
+            cpuUsageBar.classList.add('warning');
+        }
+
+        // Add update animation
+        cpuUsageText.classList.add('updating');
+        setTimeout(() => cpuUsageText.classList.remove('updating'), 300);
+    }
+
+    // Update load average
+    const cpuLoad = document.getElementById('cpu-load');
+    if (cpuLoad) {
+        cpuLoad.textContent = `${cpu.load_avg['1min']} / ${cpu.load_avg['5min']} / ${cpu.load_avg['15min']}`;
+        cpuLoad.classList.add('updating');
+        setTimeout(() => cpuLoad.classList.remove('updating'), 300);
+    }
+}
+
+function updateMemoryStats(memory) {
+    // Update memory usage
+    const memUsageBar = document.getElementById('mem-usage-bar');
+    const memUsageText = document.getElementById('mem-usage-text');
+    const memUsage = document.getElementById('mem-usage');
+
+    if (memUsageBar && memUsageText) {
+        memUsageBar.style.width = memory.usage_percent + '%';
+        memUsageText.textContent = memory.usage_percent + '%';
+
+        // Update color based on usage
+        memUsageBar.className = 'progress-bar';
+        if (memory.usage_percent > 85) {
+            memUsageBar.classList.add('danger');
+        } else if (memory.usage_percent > 70) {
+            memUsageBar.classList.add('warning');
+        }
+
+        memUsageText.classList.add('updating');
+        setTimeout(() => memUsageText.classList.remove('updating'), 300);
+    }
+
+    if (memUsage) {
+        memUsage.textContent = `${memory.used_formatted} / ${memory.available_formatted}`;
+        memUsage.classList.add('updating');
+        setTimeout(() => memUsage.classList.remove('updating'), 300);
+    }
+}
+
+function updateSwapStats(swap) {
+    // Update swap usage
+    const swapUsageBar = document.getElementById('swap-usage-bar');
+    const swapUsageText = document.getElementById('swap-usage-text');
+    const swapUsage = document.getElementById('swap-usage');
+
+    if (swapUsageBar && swapUsageText) {
+        swapUsageBar.style.width = swap.usage_percent + '%';
+        swapUsageText.textContent = swap.usage_percent + '%';
+
+        // Update color based on usage
+        swapUsageBar.className = 'progress-bar';
+        if (swap.usage_percent > 75) {
+            swapUsageBar.classList.add('danger');
+        } else if (swap.usage_percent > 50) {
+            swapUsageBar.classList.add('warning');
+        }
+
+        swapUsageText.classList.add('updating');
+        setTimeout(() => swapUsageText.classList.remove('updating'), 300);
+    }
+
+    if (swapUsage) {
+        swapUsage.textContent = `${swap.used_formatted} / ${swap.free_formatted}`;
+        swapUsage.classList.add('updating');
+        setTimeout(() => swapUsage.classList.remove('updating'), 300);
+    }
+}
+
+function updateUptime(uptime) {
+    const uptimeEl = document.getElementById('system-uptime');
+    if (uptimeEl) {
+        uptimeEl.textContent = uptime.formatted;
+        uptimeEl.classList.add('updating');
+        setTimeout(() => uptimeEl.classList.remove('updating'), 300);
+    }
+
+    // Update system time
+    const timeEl = document.getElementById('system-time');
+    if (timeEl) {
+        const now = new Date();
+        const formattedTime = now.getFullYear() + '-' +
+            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+            String(now.getDate()).padStart(2, '0') + ' ' +
+            String(now.getHours()).padStart(2, '0') + ':' +
+            String(now.getMinutes()).padStart(2, '0') + ':' +
+            String(now.getSeconds()).padStart(2, '0');
+        timeEl.textContent = formattedTime;
+    }
+}
+
+function updateNetworkInterfaces(interfaces) {
+    const container = document.getElementById('network-interfaces');
+    if (!container) return;
+
+    if (interfaces.length === 0) {
+        container.innerHTML = '<p style="color: #666; text-align: center;">No network interfaces found</p>';
+        return;
+    }
+
+    let html = '<div style="display: grid; gap: 15px;">';
+
+    interfaces.forEach(iface => {
+        const statusColor = iface.is_up ? '#4caf50' : '#f44336';
+        const statusIcon = iface.is_up ? '●' : '○';
+
+        html += `
+            <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-weight: 600; color: #ff8c00; font-size: 16px;">${iface.name}</span>
+                        <span style="color: ${statusColor}; font-size: 14px;">${statusIcon} ${iface.status}</span>
+                    </div>
+                    <span style="background: rgba(255, 140, 0, 0.2); color: #ff8c00; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;">${iface.type}</span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 13px;">
+                    <div>
+                        <span style="color: #888;">IP Address:</span>
+                        <span style="color: #fff; margin-left: 8px;">${iface.ip}</span>
+                    </div>
+                    <div>
+                        <span style="color: #888;">Speed:</span>
+                        <span style="color: #fff; margin-left: 8px;">${iface.speed}</span>
+                    </div>
+                    <div>
+                        <span style="color: #888;">MAC:</span>
+                        <span style="color: #fff; margin-left: 8px; font-family: monospace; font-size: 12px;">${iface.mac}</span>
+                    </div>
+                    <div>
+                        <span style="color: #888;">Traffic:</span>
+                        <span style="color: #4caf50; margin-left: 8px;">↓ ${iface.rx_formatted}</span>
+                        <span style="color: #f44336; margin-left: 8px;">↑ ${iface.tx_formatted}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function updateLastUpdateText() {
+    const lastUpdateEl = document.getElementById('last-update');
+    if (!lastUpdateEl) return;
+
+    const secondsAgo = Math.floor((Date.now() - lastUpdateTime) / 1000);
+
+    if (secondsAgo < 2) {
+        lastUpdateEl.textContent = 'Just now';
+    } else if (secondsAgo < 60) {
+        lastUpdateEl.textContent = secondsAgo + 's ago';
+    } else {
+        lastUpdateEl.textContent = Math.floor(secondsAgo / 60) + 'm ago';
+    }
+}
+
+function flashRefreshIndicator() {
+    const indicator = document.getElementById('refresh-indicator');
+    if (!indicator) return;
+
+    indicator.style.background = '#4caf50';
+    indicator.style.transform = 'scale(1.3)';
+
+    setTimeout(() => {
+        indicator.style.transform = 'scale(1)';
+    }, 150);
+}
+
+function startAutoRefresh() {
+    // Update immediately
+    updateSystemStats();
+
+    // Then update every second
+    refreshInterval = setInterval(() => {
+        if (isPageVisible) {
+            updateSystemStats();
+        }
+    }, 1000);
+
+    // Update "last update" text more frequently
+    setInterval(updateLastUpdateText, 1000);
+}
+
+// Start auto-refresh when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    startAutoRefresh();
+
+    // Load network interfaces initially
+    fetch('/api/system-stats.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.network) {
+                updateNetworkInterfaces(data.network);
+            }
+        });
+});
+
+// Clean up when page is being unloaded
+window.addEventListener('beforeunload', function() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+});
+</script>
+
 <?php include VIEWS_PATH . '/layout/footer.php'; ?>

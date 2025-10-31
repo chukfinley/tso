@@ -1,8 +1,8 @@
 #!/bin/bash
 
 ################################################################################
-# ServerOS Update Script
-# Updates ServerOS to latest version from GitHub
+# TSO Update Script
+# Updates TSO to latest version from GitHub
 ################################################################################
 
 # Ensure script is running with bash (not sh)
@@ -28,7 +28,7 @@ INSTALL_DIR="/opt/serveros"
 print_header() {
     echo -e "${BLUE}"
     echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║                  ServerOS Update Script                        ║"
+    echo "║                    TSO Update Script                           ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
@@ -58,7 +58,7 @@ check_root() {
 
 check_installation() {
     if [[ ! -d "${INSTALL_DIR}" ]] || [[ ! -f "${INSTALL_DIR}/config/config.php" ]]; then
-        print_error "ServerOS is not installed!"
+        print_error "TSO is not installed!"
         print_info "Run the installer first:"
         echo "  curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash"
         exit 1
@@ -182,7 +182,7 @@ show_completion() {
     echo -e "${GREEN}║                Update Completed Successfully!                  ║${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    print_success "ServerOS has been updated to the latest version!"
+    print_success "TSO has been updated to the latest version!"
     echo ""
     print_info "What was updated:"
     echo "  ✓ Application files (PHP, HTML, CSS, JS)"
@@ -196,7 +196,7 @@ show_completion() {
     echo "  ✓ Logs and storage"
     echo ""
     IP_ADDRESS=$(hostname -I | awk '{print $1}')
-    echo "Access your ServerOS at: ${GREEN}http://${IP_ADDRESS}${NC}"
+    echo "Access your TSO at: ${GREEN}http://${IP_ADDRESS}${NC}"
     echo ""
     print_info "To update in the future:"
     echo "  • Use the web UI: Settings → System Update"

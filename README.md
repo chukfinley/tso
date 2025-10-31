@@ -1,4 +1,4 @@
-# ServerOS 🚀
+# TSO 🚀
 
 A Debian-based server management system inspired by Unraid and TrueNAS — built in pure PHP.
 
@@ -70,7 +70,7 @@ curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh |
 
 ## Quick Installation ⚡
 
-Install ServerOS with a single command:
+Install TSO with a single command:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash
@@ -96,7 +96,7 @@ sudo ./install.sh
 
 For detailed installation instructions, see [INSTALL.md](INSTALL.md)
 
-## Updating ServerOS 🔄
+## Updating TSO 🔄
 
 ### Quick Update (Fastest!)
 

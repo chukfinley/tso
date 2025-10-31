@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get ServerOS running in minutes!
+Get TSO running in minutes!
 
 ## Production Installation
 
@@ -66,7 +66,7 @@ Default Credentials:
 1. Open your browser to the URL shown
 2. Login with `admin` / `admin123`
 3. **Immediately change the password!**
-4. Start exploring ServerOS
+4. Start exploring TSO
 
 ## Development Mode
 

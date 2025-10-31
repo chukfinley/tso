@@ -25,7 +25,6 @@ $action = $input['action'] ?? '';
 
 if ($action === 'init') {
     // Initialize terminal session
-    session_start();
     $sessionId = uniqid('term_', true);
 
     // Store session in PHP session for validation
@@ -52,7 +51,6 @@ if ($action === 'init') {
 }
 
 if ($action === 'exec') {
-    session_start();
     $command = $input['command'] ?? '';
     $sessionId = $input['session_id'] ?? '';
 

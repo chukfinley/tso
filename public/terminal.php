@@ -253,7 +253,7 @@ function initSession() {
             sessionId = data.session_id;
             updateConnectionStatus('connected');
             term.write('\x1b[32m╔══════════════════════════════════════╗\x1b[0m\r\n');
-            term.write('\x1b[32m║     ServerOS Web Terminal v1.0       ║\x1b[0m\r\n');
+            term.write('\x1b[32m║       TSO Web Terminal v1.0          ║\x1b[0m\r\n');
             term.write('\x1b[32m╚══════════════════════════════════════╝\x1b[0m\r\n\r\n');
             term.write('\x1b[33mType commands and press Enter.\x1b[0m\r\n');
             term.write('\x1b[33mType "clear" to clear screen.\x1b[0m\r\n');

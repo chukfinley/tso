@@ -1,6 +1,6 @@
-# ServerOS Update Guide
+# TSO Update Guide
 
-Keep your ServerOS installation up-to-date with the latest features and fixes!
+Keep your TSO installation up-to-date with the latest features and fixes!
 
 ## Quick Update (Recommended)
 
@@ -219,7 +219,7 @@ sudo systemctl restart apache2
 
 ## Automated Updates
 
-To automatically update ServerOS (use with caution):
+To automatically update TSO (use with caution):
 
 ```bash
 # Create cron job (runs weekly on Sunday at 3 AM)
@@ -288,7 +288,7 @@ If update fails or causes issues:
 
 ---
 
-**Keep ServerOS updated for the latest features and security fixes!**
+**Keep TSO updated for the latest features and security fixes!**
 
 Update now:
 ```bash

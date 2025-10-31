@@ -29,7 +29,7 @@ $pageTitle = 'Settings';
                     <strong>Current Version:</strong> <?php echo APP_VERSION; ?>
                 </p>
                 <p style="color: #b0b0b0; margin-bottom: 20px;">
-                    Update ServerOS to the latest version from GitHub. This process will:
+                    Update TSO to the latest version from GitHub. This process will:
                 </p>
                 <ul style="color: #888; margin-left: 20px; margin-bottom: 20px;">
                     <li>Update all application files</li>

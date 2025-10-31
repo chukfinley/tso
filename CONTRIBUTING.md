@@ -1,6 +1,6 @@
-# Contributing to ServerOS
+# Contributing to TSO
 
-Thank you for your interest in contributing to ServerOS! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to TSO! This document provides guidelines and instructions for contributing.
 
 ## How to Contribute
 
@@ -235,4 +235,4 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ---
 
-Thank you for contributing to ServerOS! 🚀
+Thank you for contributing to TSO! 🚀

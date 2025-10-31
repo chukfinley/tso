@@ -1,10 +1,10 @@
 # Git Pull Update Guide
 
-The **fastest** way to update ServerOS!
+The **fastest** way to update TSO!
 
 ## Quick Update (Recommended)
 
-If ServerOS is installed on your server, simply run:
+If TSO is installed on your server, simply run:
 
 ```bash
 cd /opt/serveros && sudo git pull && sudo ./post-update.sh
@@ -42,7 +42,7 @@ cd /opt/serveros && sudo git pull && sudo ./post-update.sh
 ssh root@your-server
 ```
 
-### 2. Navigate to ServerOS directory
+### 2. Navigate to TSO directory
 
 ```bash
 cd /opt/serveros
@@ -131,7 +131,7 @@ sudo crontab -e
 Add:
 
 ```bash
-# Update ServerOS daily at 3 AM
+# Update TSO daily at 3 AM
 0 3 * * * cd /opt/serveros && git pull && ./post-update.sh >> /var/log/serveros-auto-update.log 2>&1
 ```
 
@@ -236,7 +236,7 @@ sudo nano config/config.php
 cd /opt/serveros && sudo git pull && sudo ./post-update.sh
 ```
 
-**That's it!** Your ServerOS is now up to date.
+**That's it!** Your TSO is now up to date.
 
 ---
 

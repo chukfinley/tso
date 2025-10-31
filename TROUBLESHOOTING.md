@@ -1,4 +1,4 @@
-# ServerOS Troubleshooting Guide
+# TSO Troubleshooting Guide
 
 Common issues and their solutions.
 

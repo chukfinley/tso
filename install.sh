@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ################################################################################
-# ServerOS Installation Script
+# TSO Installation Script
 # A Debian-based Server Management System
 ################################################################################
 
@@ -36,7 +36,7 @@ REPO_URL="https://github.com/chukfinley/tso.git"
 print_header() {
     echo -e "${BLUE}"
     echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║                    ServerOS Installer                          ║"
+    echo "║                      TSO Installer                             ║"
     echo "║          Server Management System Installation Script          ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -311,7 +311,7 @@ EOF
     # Disable default site
     a2dissite 000-default > /dev/null 2>&1 || true
 
-    # Enable ServerOS site
+    # Enable TSO site
     a2ensite serveros > /dev/null 2>&1
 
     print_success "Apache configured"
@@ -380,7 +380,7 @@ show_completion_info() {
     echo -e "${GREEN}║                 Installation Completed!                        ║${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    print_success "ServerOS has been successfully installed!"
+    print_success "TSO has been successfully installed!"
     echo ""
     echo -e "${BLUE}Access Information:${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -411,7 +411,7 @@ show_completion_info() {
 
     # Save credentials to file
     cat > /root/serveros_credentials.txt << EOF
-ServerOS Installation Credentials
+TSO Installation Credentials
 ==================================
 Generated: $(date)
 
@@ -540,7 +540,7 @@ main() {
     # Check if this is an update or new installation
     if detect_existing_installation; then
         echo ""
-        print_warning "ServerOS is already installed at ${INSTALL_DIR}"
+        print_warning "TSO is already installed at ${INSTALL_DIR}"
         echo ""
 
         if [[ "$FORCE_UPDATE" == true ]]; then

@@ -8,7 +8,7 @@ This file contains **critical** instructions for AI assistants (like Claude) whe
 
 **THE UPDATE SCRIPT MUST ALWAYS WORK!**
 
-When making ANY changes to ServerOS, remember:
+When making ANY changes to TSO, remember:
 
 ### ✅ The Update Workflow MUST Always Function
 
@@ -104,7 +104,7 @@ sudo /opt/serveros/update.sh
 
 ## Development Workflow
 
-### Making Changes to ServerOS
+### Making Changes to TSO
 
 1. **For Application Code Changes** (PHP, CSS, JS):
    ```bash
@@ -132,7 +132,7 @@ sudo /opt/serveros/update.sh
 
 ### 🚀 RECOMMENDED Update Method for Servers
 
-The **fastest** way to update on a server with ServerOS installed:
+The **fastest** way to update on a server with TSO installed:
 
 ```bash
 cd /opt/serveros && sudo git pull && sudo ./post-update.sh

@@ -2,7 +2,7 @@
 $currentPage = basename($_SERVER['PHP_SELF'], '.php');
 ?>
 <nav class="navbar">
-    <a href="/dashboard.php" class="navbar-brand">ServerOS</a>
+    <a href="/dashboard.php" class="navbar-brand">TSO</a>
     <ul class="navbar-menu">
         <li><a href="/dashboard.php" class="<?php echo $currentPage === 'dashboard' ? 'active' : ''; ?>">Dashboard</a></li>
         <li><a href="/disks.php" class="<?php echo $currentPage === 'disks' ? 'active' : ''; ?>">Disks</a></li>
