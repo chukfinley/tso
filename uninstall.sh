@@ -18,6 +18,7 @@ INSTALL_DIR="/opt/serveros"
 DB_NAME="servermanager"
 DB_USER="serveros"
 APACHE_CONF="/etc/apache2/sites-available/serveros.conf"
+KEEP_DATABASE=false
 
 print_header() {
     echo -e "${BLUE}"
@@ -51,11 +52,40 @@ check_root() {
 }
 
 confirm_uninstall() {
+    # Check for force flag
+    if [[ "$1" == "--force" ]] || [[ "$1" == "-f" ]]; then
+        print_warning "Force mode - skipping confirmation"
+        return 0
+    fi
+
     echo ""
-    print_warning "This will completely remove ServerOS from your system!"
-    print_warning "Including all data, database, and configurations."
+    print_warning "This will remove ServerOS from your system!"
     echo ""
-    read -p "Are you sure you want to continue? (yes/no): " -r
+    echo "What would you like to do?"
+    echo "  1) Remove everything (app files + database)"
+    echo "  2) Remove app files only (keep database)"
+    echo "  3) Cancel"
+    echo ""
+    read -p "Enter your choice (1-3): " -r
+    echo ""
+
+    case $REPLY in
+        1)
+            KEEP_DATABASE=false
+            print_info "Will remove everything"
+            ;;
+        2)
+            KEEP_DATABASE=true
+            print_info "Will keep database"
+            ;;
+        3|*)
+            print_info "Uninstallation cancelled."
+            exit 0
+            ;;
+    esac
+
+    echo ""
+    read -p "Are you absolutely sure? Type 'yes' to confirm: " -r
     echo ""
 
     if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
@@ -82,8 +112,30 @@ remove_apache_config() {
     fi
 }
 
+backup_database() {
+    print_info "Backing up database..."
+
+    BACKUP_FILE="/root/serveros_db_backup_$(date +%Y%m%d_%H%M%S).sql"
+
+    if mysqldump ${DB_NAME} > ${BACKUP_FILE} 2>/dev/null; then
+        print_success "Database backed up to: ${BACKUP_FILE}"
+    else
+        print_warning "Could not backup database (it may not exist)"
+    fi
+}
+
 remove_database() {
+    if [[ "$KEEP_DATABASE" == true ]]; then
+        print_info "Keeping database as requested..."
+        backup_database
+        print_success "Database preserved"
+        return 0
+    fi
+
     print_info "Removing database and user..."
+
+    # Backup before removing
+    backup_database
 
     # Drop database
     mysql -e "DROP DATABASE IF EXISTS ${DB_NAME};" 2>/dev/null || true
@@ -124,11 +176,23 @@ show_completion() {
     echo -e "${GREEN}║              Uninstallation Completed!                         ║${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    print_success "ServerOS has been completely removed from your system."
+
+    if [[ "$KEEP_DATABASE" == true ]]; then
+        print_success "ServerOS application files removed (database preserved)"
+    else
+        print_success "ServerOS has been completely removed from your system."
+    fi
+
     echo ""
 
+    # Show backup files
+    BACKUP_FILES=$(ls -t /root/serveros_db_backup_*.sql 2>/dev/null | head -1)
+    if [[ -n "$BACKUP_FILES" ]]; then
+        print_info "Database backup: $BACKUP_FILES"
+    fi
+
     if [[ -f /root/serveros_credentials.txt.bak ]]; then
-        print_info "Old credentials backed up to: /root/serveros_credentials.txt.bak"
+        print_info "Credentials backup: /root/serveros_credentials.txt.bak"
     fi
 
     echo ""
@@ -141,12 +205,57 @@ show_completion() {
     echo "  sudo apt remove --purge apache2 mariadb-server php php-*"
     echo "  sudo apt autoremove"
     echo ""
+
+    if [[ "$KEEP_DATABASE" == true ]]; then
+        echo ""
+        print_info "To reinstall ServerOS with existing database:"
+        echo "  curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash"
+        echo ""
+    fi
+}
+
+show_usage() {
+    echo "Usage: sudo ./uninstall.sh [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --force, -f          Skip confirmation prompts (removes everything)"
+    echo "  --keep-db            Remove app but keep database"
+    echo "  --help, -h           Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  sudo ./uninstall.sh              # Interactive mode"
+    echo "  sudo ./uninstall.sh --force      # Remove everything without asking"
+    echo "  sudo ./uninstall.sh --keep-db    # Remove app, keep database"
+    echo ""
 }
 
 main() {
+    # Parse arguments
+    FORCE_MODE=false
+
+    for arg in "$@"; do
+        case $arg in
+            --force|-f)
+                FORCE_MODE=true
+                ;;
+            --keep-db)
+                KEEP_DATABASE=true
+                ;;
+            --help|-h)
+                show_usage
+                exit 0
+                ;;
+        esac
+    done
+
     print_header
     check_root
-    confirm_uninstall
+
+    if [[ "$FORCE_MODE" == true ]]; then
+        confirm_uninstall "--force"
+    else
+        confirm_uninstall
+    fi
 
     echo ""
     print_info "Starting uninstallation process..."
