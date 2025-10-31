@@ -464,12 +464,14 @@ EOF
 
     # Create Apache configuration with HTTP redirect and HTTPS
     cat > ${APACHE_CONF} << EOF
-# HTTP VirtualHost - Redirect to HTTPS
+# HTTP VirtualHost - Force redirect ALL traffic to HTTPS
 <VirtualHost *:80>
     ServerName ${HOSTNAME}
+    ServerAlias *
     ServerAdmin admin@localhost
 
-    # Redirect all HTTP traffic to HTTPS
+    # No DocumentRoot - ensure nothing is served over HTTP
+    # Redirect ALL HTTP traffic to HTTPS (permanent 301 redirect)
     RewriteEngine On
     RewriteCond %{HTTPS} off
     RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
@@ -481,6 +483,7 @@ EOF
 # HTTPS VirtualHost - Main site
 <VirtualHost *:443>
     ServerName ${HOSTNAME}
+    ServerAlias *
     ServerAdmin admin@localhost
     DocumentRoot ${WEB_ROOT}
 
@@ -548,8 +551,9 @@ EOF
             "false"  # Don't exit on error for PHP module
     fi
 
-    # Disable default site
+    # Disable default sites to ensure only HTTPS is served
     a2dissite 000-default > /dev/null 2>&1 || true
+    a2dissite default-ssl > /dev/null 2>&1 || true
 
     # Enable TSO site
     run_command \
