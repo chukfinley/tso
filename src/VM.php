@@ -547,4 +547,220 @@ class VM {
         $bytes /= pow(1024, $pow);
         return round($bytes, $precision) . ' ' . $units[$pow];
     }
+
+    // ============ Backup Methods ============
+
+    /**
+     * Create backup of VM disk
+     */
+    public function createBackup($vmId, $notes = '') {
+        $vm = $this->getById($vmId);
+        if (!$vm) {
+            throw new Exception("VM not found");
+        }
+
+        if ($vm['status'] === 'running') {
+            throw new Exception("Cannot backup running VM. Stop it first.");
+        }
+
+        if (empty($vm['disk_path']) || !file_exists($vm['disk_path'])) {
+            throw new Exception("VM disk not found");
+        }
+
+        // Create backup directory
+        $backupDir = $this->vmDir . '/backups';
+        if (!is_dir($backupDir)) {
+            mkdir($backupDir, 0755, true);
+        }
+
+        // Generate backup name
+        $timestamp = date('Y-m-d_H-i-s');
+        $backupName = $vm['name'] . '_' . $timestamp;
+        $backupPath = $backupDir . '/' . $backupName . '.qcow2.gz';
+
+        // Insert backup record
+        $this->db->query(
+            "INSERT INTO vm_backups (vm_id, vm_name, backup_name, backup_path, compressed, compression_type, status, created_by, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [$vmId, $vm['name'], $backupName, $backupPath, true, 'gzip', 'creating', $_SESSION['user_id'] ?? null, $notes]
+        );
+
+        $backupId = $this->db->lastInsertId();
+
+        // Create backup in background
+        $cmd = sprintf(
+            'nohup bash -c "gzip -c %s > %s && echo done" > /dev/null 2>&1 & echo $!',
+            escapeshellarg($vm['disk_path']),
+            escapeshellarg($backupPath)
+        );
+
+        $pid = trim(shell_exec($cmd));
+
+        return [
+            'backup_id' => $backupId,
+            'pid' => $pid,
+            'backup_path' => $backupPath
+        ];
+    }
+
+    /**
+     * Get all backups for a VM
+     */
+    public function getBackups($vmId) {
+        return $this->db->fetchAll(
+            "SELECT * FROM vm_backups WHERE vm_id = ? ORDER BY created_at DESC",
+            [$vmId]
+        );
+    }
+
+    /**
+     * Get all backups
+     */
+    public function getAllBackups() {
+        return $this->db->fetchAll(
+            "SELECT * FROM vm_backups ORDER BY created_at DESC"
+        );
+    }
+
+    /**
+     * Get backup by ID
+     */
+    public function getBackupById($backupId) {
+        return $this->db->fetchOne(
+            "SELECT * FROM vm_backups WHERE id = ?",
+            [$backupId]
+        );
+    }
+
+    /**
+     * Update backup status
+     */
+    public function updateBackupStatus($backupId, $status) {
+        $this->db->query(
+            "UPDATE vm_backups SET status = ?, completed_at = NOW() WHERE id = ?",
+            [$status, $backupId]
+        );
+    }
+
+    /**
+     * Check and update backup status
+     */
+    public function checkBackupStatus($backupId) {
+        $backup = $this->getBackupById($backupId);
+        if (!$backup) {
+            return null;
+        }
+
+        if ($backup['status'] === 'creating') {
+            // Check if backup file exists and has size
+            if (file_exists($backup['backup_path'])) {
+                $size = filesize($backup['backup_path']);
+
+                // Check if file is still being written (wait a moment and check again)
+                sleep(1);
+                $newSize = filesize($backup['backup_path']);
+
+                if ($size === $newSize && $size > 0) {
+                    // Backup complete
+                    $this->db->query(
+                        "UPDATE vm_backups SET status = 'completed', backup_size = ?, completed_at = NOW() WHERE id = ?",
+                        [$size, $backupId]
+                    );
+                    return 'completed';
+                }
+            }
+        }
+
+        return $backup['status'];
+    }
+
+    /**
+     * Restore VM from backup
+     */
+    public function restoreBackup($backupId) {
+        $backup = $this->getBackupById($backupId);
+        if (!$backup) {
+            throw new Exception("Backup not found");
+        }
+
+        if ($backup['status'] !== 'completed') {
+            throw new Exception("Cannot restore from incomplete backup");
+        }
+
+        $vm = $this->getById($backup['vm_id']);
+        if (!$vm) {
+            throw new Exception("VM not found");
+        }
+
+        if ($vm['status'] === 'running') {
+            throw new Exception("Cannot restore to running VM. Stop it first.");
+        }
+
+        if (!file_exists($backup['backup_path'])) {
+            throw new Exception("Backup file not found");
+        }
+
+        // Update backup status
+        $this->db->query(
+            "UPDATE vm_backups SET status = 'restoring' WHERE id = ?",
+            [$backupId]
+        );
+
+        // Backup current disk before restoring
+        if (file_exists($vm['disk_path'])) {
+            $backupCurrent = $vm['disk_path'] . '.before-restore.' . time();
+            rename($vm['disk_path'], $backupCurrent);
+        }
+
+        // Restore from backup
+        $cmd = sprintf(
+            'gunzip -c %s > %s',
+            escapeshellarg($backup['backup_path']),
+            escapeshellarg($vm['disk_path'])
+        );
+
+        exec($cmd, $output, $returnCode);
+
+        if ($returnCode !== 0) {
+            // Restore failed, restore backup
+            if (isset($backupCurrent) && file_exists($backupCurrent)) {
+                rename($backupCurrent, $vm['disk_path']);
+            }
+
+            $this->db->query(
+                "UPDATE vm_backups SET status = 'completed' WHERE id = ?",
+                [$backupId]
+            );
+
+            throw new Exception("Failed to restore backup");
+        }
+
+        // Mark backup as completed again
+        $this->db->query(
+            "UPDATE vm_backups SET status = 'completed' WHERE id = ?",
+            [$backupId]
+        );
+
+        return true;
+    }
+
+    /**
+     * Delete backup
+     */
+    public function deleteBackup($backupId) {
+        $backup = $this->getBackupById($backupId);
+        if (!$backup) {
+            return false;
+        }
+
+        // Delete file
+        if (file_exists($backup['backup_path'])) {
+            unlink($backup['backup_path']);
+        }
+
+        // Delete record
+        $this->db->query("DELETE FROM vm_backups WHERE id = ?", [$backupId]);
+
+        return true;
+    }
 }

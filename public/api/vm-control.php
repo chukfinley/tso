@@ -89,6 +89,64 @@ try {
             echo json_encode(['success' => true, 'bridges' => $bridges]);
             break;
 
+        case 'create_backup':
+            $notes = $input['notes'] ?? '';
+            $result = $vm->createBackup($vmId, $notes);
+
+            // Log activity
+            $vmData = $vm->getById($vmId);
+            $db->query(
+                "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)",
+                [$_SESSION['user_id'], 'vm_backup_create', "Created backup for VM: {$vmData['name']}", $_SERVER['REMOTE_ADDR']]
+            );
+
+            echo json_encode(['success' => true, 'backup_id' => $result['backup_id'], 'message' => 'Backup started']);
+            break;
+
+        case 'list_backups':
+            $backups = $vm->getBackups($vmId);
+            echo json_encode(['success' => true, 'backups' => $backups]);
+            break;
+
+        case 'list_all_backups':
+            $backups = $vm->getAllBackups();
+            echo json_encode(['success' => true, 'backups' => $backups]);
+            break;
+
+        case 'check_backup_status':
+            $backupId = $input['backup_id'] ?? 0;
+            $status = $vm->checkBackupStatus($backupId);
+            echo json_encode(['success' => true, 'status' => $status]);
+            break;
+
+        case 'restore_backup':
+            $backupId = $input['backup_id'] ?? 0;
+            $vm->restoreBackup($backupId);
+
+            // Log activity
+            $backup = $vm->getBackupById($backupId);
+            $db->query(
+                "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)",
+                [$_SESSION['user_id'], 'vm_backup_restore', "Restored VM from backup: {$backup['backup_name']}", $_SERVER['REMOTE_ADDR']]
+            );
+
+            echo json_encode(['success' => true, 'message' => 'Backup restored successfully']);
+            break;
+
+        case 'delete_backup':
+            $backupId = $input['backup_id'] ?? 0;
+            $backup = $vm->getBackupById($backupId);
+            $vm->deleteBackup($backupId);
+
+            // Log activity
+            $db->query(
+                "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)",
+                [$_SESSION['user_id'], 'vm_backup_delete', "Deleted backup: {$backup['backup_name']}", $_SERVER['REMOTE_ADDR']]
+            );
+
+            echo json_encode(['success' => true, 'message' => 'Backup deleted successfully']);
+            break;
+
         default:
             echo json_encode(['success' => false, 'error' => 'Invalid action']);
     }

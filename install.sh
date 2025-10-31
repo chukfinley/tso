@@ -108,6 +108,30 @@ install_dependencies() {
         > /dev/null 2>&1
 
     print_success "LAMP stack installed"
+
+    print_info "Installing QEMU/KVM and virtualization tools..."
+
+    # Install QEMU/KVM packages
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        qemu-kvm \
+        qemu-system-x86 \
+        qemu-utils \
+        libvirt-daemon-system \
+        libvirt-clients \
+        bridge-utils \
+        virt-manager \
+        gzip \
+        > /dev/null 2>&1
+
+    # Enable and start libvirtd
+    systemctl enable libvirtd > /dev/null 2>&1
+    systemctl start libvirtd > /dev/null 2>&1
+
+    # Add www-data to necessary groups for VM management
+    usermod -aG kvm www-data > /dev/null 2>&1 || true
+    usermod -aG libvirt www-data > /dev/null 2>&1 || true
+
+    print_success "QEMU/KVM and virtualization tools installed"
 }
 
 configure_mariadb() {

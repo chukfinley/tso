@@ -1,0 +1,20 @@
+# Sudoers configuration for ServerOS Samba Management
+# Copy this file to /etc/sudoers.d/serveros-samba
+# Usage: sudo cp config/samba-sudoers /etc/sudoers.d/serveros-samba
+#        sudo chmod 440 /etc/sudoers.d/serveros-samba
+
+# Allow www-data user to manage Samba without password
+www-data ALL=(ALL) NOPASSWD: /usr/bin/smbpasswd
+www-data ALL=(ALL) NOPASSWD: /usr/sbin/useradd
+www-data ALL=(ALL) NOPASSWD: /usr/sbin/userdel
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl reload smbd
+www-data ALL=(ALL) NOPASSWD: /bin/systemctl is-active smbd
+www-data ALL=(ALL) NOPASSWD: /usr/sbin/service smbd reload
+www-data ALL=(ALL) NOPASSWD: /usr/sbin/service smbd status
+www-data ALL=(ALL) NOPASSWD: /usr/bin/testparm
+www-data ALL=(ALL) NOPASSWD: /usr/bin/smbstatus
+www-data ALL=(ALL) NOPASSWD: /bin/mv /tmp/smb.conf.* /etc/samba/smb.conf
+www-data ALL=(ALL) NOPASSWD: /bin/chmod 644 /etc/samba/smb.conf
+www-data ALL=(ALL) NOPASSWD: /bin/chown root\:root /srv/samba/*
+www-data ALL=(ALL) NOPASSWD: /bin/chmod * /srv/samba/*
+

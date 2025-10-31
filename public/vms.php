@@ -161,6 +161,11 @@ $pageTitle = 'Virtual Machines';
                                         <?php endif; ?>
 
                                         <button onclick="viewLogs(<?php echo $vm['id']; ?>, '<?php echo htmlspecialchars($vm['name']); ?>')" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">📋 Logs</button>
+
+                                        <?php if ($vm['status'] === 'stopped'): ?>
+                                            <button onclick="viewBackups(<?php echo $vm['id']; ?>, '<?php echo htmlspecialchars($vm['name']); ?>')" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">💾 Backups</button>
+                                        <?php endif; ?>
+
                                         <button onclick="openEditModal(<?php echo htmlspecialchars(json_encode($vm)); ?>)" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">⚙ Edit</button>
 
                                         <?php if ($vm['status'] === 'stopped'): ?>
@@ -622,3 +627,195 @@ document.querySelectorAll('.modal').forEach(modal => {
 </script>
 
 <?php include VIEWS_PATH . '/layout/footer.php'; ?>
+
+<!-- Backups Modal -->
+<div id="backupsModal" class="modal">
+    <div class="modal-content" style="max-width: 900px;">
+        <h2 style="color: #fff; margin-bottom: 20px;">VM Backups: <span id="backups_vm_name"></span></h2>
+
+        <button onclick="createBackup()" class="btn btn-primary" style="margin-bottom: 20px;">+ Create New Backup</button>
+
+        <div id="backups_list">
+            <p style="color: #666;">Loading backups...</p>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button onclick="refreshBackups()" class="btn btn-primary">↻ Refresh</button>
+            <button onclick="closeBackupsModal()" class="btn btn-secondary">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentBackupVmId = null;
+let currentBackupVmName = '';
+
+function viewBackups(vmId, vmName) {
+    currentBackupVmId = vmId;
+    currentBackupVmName = vmName;
+    document.getElementById('backups_vm_name').textContent = vmName;
+    document.getElementById('backupsModal').style.display = 'flex';
+    refreshBackups();
+}
+
+function refreshBackups() {
+    if (!currentBackupVmId) return;
+
+    fetch('/api/vm-control.php?action=list_backups&vm_id=' + currentBackupVmId)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayBackups(data.backups);
+            }
+        })
+        .catch(error => console.error('Error fetching backups:', error));
+}
+
+function displayBackups(backups) {
+    const container = document.getElementById('backups_list');
+
+    if (backups.length === 0) {
+        container.innerHTML = '<p style="color: #666;">No backups found. Create one to get started!</p>';
+        return;
+    }
+
+    let html = '<table class="table"><thead><tr><th>Backup Name</th><th>Size</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>';
+
+    backups.forEach(backup => {
+        const size = backup.backup_size ? formatBytes(backup.backup_size) : 'N/A';
+        const created = new Date(backup.created_at).toLocaleString();
+        const statusClass = backup.status === 'completed' ? 'badge-active' : backup.status === 'creating' ? 'badge-inactive' : 'badge-admin';
+
+        html += '<tr>';
+        html += '<td><strong>' + backup.backup_name + '</strong><br><small style="color: #888;">' + (backup.notes || '') + '</small></td>';
+        html += '<td>' + size + '</td>';
+        html += '<td><span class="badge ' + statusClass + '">' + backup.status + '</span></td>';
+        html += '<td>' + created + '</td>';
+        html += '<td>';
+
+        if (backup.status === 'completed') {
+            html += '<button onclick="restoreBackup(' + backup.id + ', \'' + backup.backup_name + '\')" class="btn btn-success" style="padding: 6px 12px; font-size: 12px;">↺ Restore</button> ';
+        }
+
+        html += '<button onclick="deleteBackup(' + backup.id + ', \'' + backup.backup_name + '\')" class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;">🗑 Delete</button>';
+        html += '</td></tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function createBackup() {
+    const notes = prompt('Enter backup notes (optional):');
+    if (notes === null) return;
+
+    fetch('/api/vm-control.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'create_backup',
+            vm_id: currentBackupVmId,
+            notes: notes
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Backup started! This may take a few minutes...');
+            refreshBackups();
+            checkBackupProgress(data.backup_id);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
+
+function checkBackupProgress(backupId) {
+    const interval = setInterval(() => {
+        fetch('/api/vm-control.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'check_backup_status',
+                backup_id: backupId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.status === 'completed') {
+                clearInterval(interval);
+                refreshBackups();
+                alert('Backup completed successfully!');
+            } else if (data.success && data.status === 'failed') {
+                clearInterval(interval);
+                refreshBackups();
+                alert('Backup failed!');
+            }
+        });
+    }, 3000);
+}
+
+function restoreBackup(backupId, backupName) {
+    if (!confirm('Are you sure you want to restore from backup "' + backupName + '"? This will overwrite the current VM disk!')) {
+        return;
+    }
+
+    fetch('/api/vm-control.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'restore_backup',
+            backup_id: backupId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Backup restored successfully!');
+            closeBackupsModal();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
+
+function deleteBackup(backupId, backupName) {
+    if (!confirm('Are you sure you want to delete backup "' + backupName + '"?')) {
+        return;
+    }
+
+    fetch('/api/vm-control.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'delete_backup',
+            backup_id: backupId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Backup deleted successfully!');
+            refreshBackups();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => alert('Error: ' + error.message));
+}
+
+function closeBackupsModal() {
+    document.getElementById('backupsModal').style.display = 'none';
+    currentBackupVmId = null;
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+</script>
