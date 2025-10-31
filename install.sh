@@ -154,7 +154,6 @@ install_dependencies() {
     # Install packages
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
         apache2 \
-        libapache2-mod-ssl \
         mariadb-server \
         php \
         php-mysql \
@@ -723,27 +722,38 @@ restart_services() {
     verify_service "apache2" "Apache2"
     
     # Verify SSL is working by checking if SSL module is loaded
-    # First, ensure the SSL module package is installed
-    if ! dpkg -l | grep -q "^ii.*libapache2-mod-ssl"; then
-        print_info "Installing Apache SSL module package..."
-        run_command \
-            "apt-get install -y -qq libapache2-mod-ssl 2>&1" \
-            "Install Apache SSL module package" \
-            "false"
-        
-        # Enable SSL module after installation
+    # Check if mod_ssl.so file exists (mod_ssl should be available with apache2)
+    if [ -f /usr/lib/apache2/modules/mod_ssl.so ]; then
+        # Module file exists, just enable it if not already enabled
+        if ! apache2ctl -M 2>/dev/null | grep -q ssl_module; then
+            print_info "Enabling Apache SSL module..."
+            run_command \
+                "a2enmod ssl 2>&1" \
+                "Enable Apache SSL module" \
+                "false"
+            
+            # Restart Apache to load the module
+            run_command \
+                "systemctl restart apache2 2>&1" \
+                "Restart Apache to load SSL module" \
+                "false"
+            
+            # Wait a moment for Apache to fully restart
+            sleep 2
+        fi
+    else
+        print_warning "mod_ssl.so not found at /usr/lib/apache2/modules/mod_ssl.so"
+        print_info "Attempting to enable SSL module anyway..."
         run_command \
             "a2enmod ssl 2>&1" \
             "Enable Apache SSL module" \
             "false"
         
-        # Restart Apache again to load the newly installed module
         run_command \
             "systemctl restart apache2 2>&1" \
             "Restart Apache to load SSL module" \
             "false"
         
-        # Wait a moment for Apache to fully restart
         sleep 2
     fi
     

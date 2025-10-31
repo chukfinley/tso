@@ -19,44 +19,81 @@ curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh |
 - **Top Navigation Bar** - Quick access to all management modules
 - **Activity Logging** - Track all user actions and system events
 - **Role-Based Access** - Admin and User roles with permission controls
+- **Network Shares** - Full SMB/Samba share management with user permissions
+- **Virtual Machines** - QEMU/KVM VM creation, management, and SPICE console access
+- **Web Terminal** - Browser-based terminal access for administrators
+- **System Updates** - Built-in system update functionality via web interface
+- **System Logs** - Comprehensive logging and log viewing interface
 
-## Modules (In Development)
+## Modules
 
-- ✅ Dashboard - System overview and statistics
-- ✅ Users - User management (Admin only)
-- 🚧 Disks - Storage device management
-- 🚧 Shares - Network shares (SMB/NFS)
-- 🚧 Docker - Container management
-- 🚧 VMs - Virtual machine management
-- 🚧 Plugins - Plugin system
-- 🚧 Settings - System configuration
+- ✅ **Dashboard** - System overview and statistics
+- ✅ **Users** - User management (Admin only)
+- ✅ **Shares** - Network shares (SMB/Samba) with full CRUD, user management, and permissions
+- ✅ **VMs** - Virtual machine management (QEMU/KVM) with console access
+- ✅ **Logs** - System and activity log viewing with filtering
+- ✅ **Settings** - System configuration and updates
+- ✅ **Terminal** - Web-based terminal access (Admin only)
+- ✅ **Profile** - User profile management
+- 🚧 **Disks** - Storage device management (in development)
+- 🚧 **Docker** - Container management (in development)
+- 🚧 **Plugins** - Plugin system (in development)
 
 ## Project Structure
 
 ```
 /home/user/git/tso/
 ├── config/
-│   └── config.php          # Application configuration
+│   ├── config.php          # Application configuration
+│   ├── config.example.php  # Configuration template
+│   └── samba-sudoers       # Samba sudo permissions
 ├── public/                 # Web root (point your web server here)
+│   ├── api/                # API endpoints
+│   │   ├── share-control.php    # Share management API
+│   │   ├── vm-control.php       # VM management API
+│   │   ├── system-stats.php     # System statistics API
+│   │   ├── system-update.php    # System update API
+│   │   ├── terminal-exec.php    # Terminal execution API
+│   │   └── logs.php             # Logs API
 │   ├── css/
 │   │   └── style.css       # Main stylesheet
 │   ├── js/
-│   │   └── main.js         # JavaScript utilities
+│   │   ├── main.js         # JavaScript utilities
+│   │   └── shares.js       # Shares module JavaScript
 │   ├── index.php           # Main entry point
 │   ├── login.php           # Login page
 │   ├── dashboard.php       # Dashboard
 │   ├── users.php           # User management
-│   └── ...                 # Other module pages
+│   ├── shares.php          # Network shares management
+│   ├── vms.php             # Virtual machine management
+│   ├── logs.php            # System logs viewer
+│   ├── settings.php        # System settings
+│   ├── terminal.php        # Web terminal
+│   ├── profile.php         # User profile
+│   ├── disks.php           # Disk management (placeholder)
+│   ├── docker.php          # Docker management (placeholder)
+│   └── plugins.php         # Plugin management (placeholder)
 ├── src/
 │   ├── Database.php        # Database connection handler
 │   ├── User.php            # User model
-│   └── Auth.php            # Authentication handler
+│   ├── Auth.php            # Authentication handler
+│   ├── Share.php           # Share management class
+│   ├── VM.php              # VM management class
+│   ├── Logger.php          # Logging handler
+│   └── ErrorHandler.php    # Error handling
 ├── views/
 │   ├── layout/
 │   │   ├── header.php      # HTML header
 │   │   ├── navbar.php      # Top navigation bar
 │   │   └── footer.php      # HTML footer
 │   └── pages/              # Page templates
+├── tools/                  # Management utilities
+│   ├── reset-admin.php     # Reset admin password
+│   ├── check-db.php        # Database health check
+│   └── migrate-database.php # Database migrations
+├── scripts/                # Setup scripts
+│   └── setup-shares.sh     # Samba setup script
+├── storage/                # Storage directory
 └── init.sql                # Database schema
 
 ```
@@ -229,36 +266,59 @@ After installation, login with:
 ## Usage
 
 1. Navigate to `http://serveros.local` (or your configured domain)
-2. Login with default credentials
-3. Access the dashboard to view system overview
-4. Manage users via the Users page (Admin only)
-5. Other modules are placeholders for future development
+2. Login with default credentials (`admin` / `admin123`)
+3. Access the dashboard to view system overview and statistics
+4. **Manage Users** - Create, edit, and delete system users (Admin only)
+5. **Network Shares** - Create and manage SMB/Samba shares with user permissions and access control
+6. **Virtual Machines** - Create and manage QEMU/KVM virtual machines with SPICE console access
+7. **View Logs** - Browse system logs and activity logs with filtering options
+8. **System Settings** - Configure system settings and update TSO from the web interface
+9. **Web Terminal** - Access a browser-based terminal (Admin only)
+10. **Profile** - Manage your user profile and preferences
+
+For detailed guides on specific features:
+- **Shares**: See [SHARES-QUICKSTART.md](SHARES-QUICKSTART.md) and [SHARES-FEATURES.md](SHARES-FEATURES.md)
+- **VMs**: Create and manage virtual machines through the VMs interface
 
 ## Development Roadmap
 
-### Phase 1: Core System ✅
+### Phase 1: Core System ✅ **COMPLETE**
 - [x] User authentication and session management
 - [x] User CRUD operations
 - [x] Activity logging
 - [x] Modern UI with navigation
 - [x] Dashboard with system info
+- [x] System settings and update functionality
+- [x] Web terminal access
+- [x] Profile management
 
-### Phase 2: Storage Management (Next)
+### Phase 2: Storage Management ✅ **MOSTLY COMPLETE**
+- [x] SMB/Samba share management with full CRUD operations
+- [x] Share user management and permissions (Read/Write/Admin)
+- [x] Guest access and security settings
+- [x] Activity logging for shares
+- [x] Samba configuration management
 - [ ] Disk detection and monitoring
 - [ ] RAID array management
 - [ ] File system operations
-- [ ] SMB/NFS share management
+- [ ] NFS share support
 
-### Phase 3: Virtualization
+### Phase 3: Virtualization ✅ **COMPLETE**
+- [x] VM (QEMU/KVM) support with full management
+- [x] VM creation, editing, and deletion
+- [x] SPICE console access via web browser
+- [x] Resource allocation (CPU, RAM, disk)
+- [x] Network configuration (NAT, bridge)
+- [x] ISO and disk image management
+- [ ] Docker container management (in development)
+
+### Phase 4: Advanced Features 🚧 **IN PROGRESS**
+- [ ] Disk management interface
 - [ ] Docker container management
-- [ ] VM (KVM/QEMU) support
-- [ ] Resource allocation
-
-### Phase 4: Advanced Features
 - [ ] Plugin system
 - [ ] Backup and restore
-- [ ] Monitoring and alerts
-- [ ] API endpoints
+- [ ] Enhanced monitoring and alerts
+- [x] API endpoints (Shares, VMs, System)
 
 ## Troubleshooting
 
@@ -293,7 +353,21 @@ sudo /opt/serveros/tools/check-db.php
 
 ## Contributing
 
-This is a work in progress. Feel free to contribute by implementing the planned modules!
+TSO is actively developed. Major features implemented:
+- ✅ Complete SMB/Samba share management system
+- ✅ Full QEMU/KVM virtual machine management
+- ✅ Web terminal interface
+- ✅ Comprehensive logging system
+- ✅ System update functionality
+
+Areas that could use contributions:
+- 🚧 Disk management and RAID support
+- 🚧 Docker container management
+- 🚧 Plugin system architecture
+- 🚧 NFS share support
+- 🚧 Enhanced monitoring and alerting
+
+Feel free to contribute by implementing these planned modules or improving existing features!
 
 ## License
 
