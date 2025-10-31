@@ -21,6 +21,7 @@ DB_NAME="servermanager"
 DB_USER="serveros"
 DB_PASS=$(openssl rand -base64 12)
 APACHE_CONF="/etc/apache2/sites-available/serveros.conf"
+REPO_URL="https://github.com/chukfinley/tso.git"
 
 ################################################################################
 # Helper Functions
