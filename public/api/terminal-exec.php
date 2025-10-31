@@ -25,11 +25,16 @@ $action = $input['action'] ?? '';
 
 if ($action === 'init') {
     // Initialize terminal session
+    session_start();
     $sessionId = uniqid('term_', true);
-    
+
+    // Store session in PHP session for validation
+    $_SESSION['terminal_session_id'] = $sessionId;
+    $_SESSION['terminal_session_time'] = time();
+
     // Log terminal access
     $db = Database::getInstance();
-    $db->execute(
+    $db->query(
         "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)",
         [
             $currentUser['id'],
@@ -38,7 +43,7 @@ if ($action === 'init') {
             $_SERVER['REMOTE_ADDR']
         ]
     );
-    
+
     echo json_encode([
         'success' => true,
         'session_id' => $sessionId
@@ -47,29 +52,74 @@ if ($action === 'init') {
 }
 
 if ($action === 'exec') {
+    session_start();
     $command = $input['command'] ?? '';
     $sessionId = $input['session_id'] ?? '';
-    
+
     if (empty($command)) {
         echo json_encode(['success' => false, 'error' => 'No command provided']);
         exit;
     }
-    
-    // Security: Prevent some dangerous commands
-    $blockedCommands = ['rm -rf /', 'mkfs', 'dd if=/dev/zero'];
-    foreach ($blockedCommands as $blocked) {
-        if (stripos($command, $blocked) !== false) {
+
+    // Validate session ID
+    if (empty($sessionId) || !isset($_SESSION['terminal_session_id']) || $_SESSION['terminal_session_id'] !== $sessionId) {
+        echo json_encode(['success' => false, 'error' => 'Invalid session']);
+        exit;
+    }
+
+    // Check session timeout (30 minutes)
+    if (isset($_SESSION['terminal_session_time']) && (time() - $_SESSION['terminal_session_time']) > 1800) {
+        echo json_encode(['success' => false, 'error' => 'Session expired. Please reconnect.']);
+        exit;
+    }
+
+    // Update session time
+    $_SESSION['terminal_session_time'] = time();
+
+    // Trim command
+    $command = trim($command);
+
+    // Security: Enhanced command blocking
+    $blockedPatterns = [
+        '/rm\s+(-[rf]+\s+)?\//i',           // rm -rf / or variations
+        '/mkfs/i',                           // mkfs commands
+        '/dd\s+if=\/dev\/(zero|random)/i',  // dd with /dev/zero or /dev/random
+        '/:\(\)\{\s*:\|:&\s*\};:/i',        // Fork bomb
+        '/>\s*\/dev\/sd[a-z]/i',            // Writing to disk devices
+        '/(systemctl|service)\s+(stop|disable|mask)\s+sshd/i',  // Disabling SSH
+        '/iptables\s+-[A-Z]\s+INPUT\s+-j\s+DROP/i',  // Blocking all incoming
+        '/shutdown/i',                       // Shutdown commands
+        '/reboot/i',                         // Reboot commands
+        '/halt/i',                           // Halt commands
+        '/init\s+[06]/i',                    // Init runlevel changes
+        '/>\s*\/etc\/(passwd|shadow|sudoers)/i',  // Overwriting critical files
+    ];
+
+    foreach ($blockedPatterns as $pattern) {
+        if (preg_match($pattern, $command)) {
+            // Log blocked command attempt
+            $db = Database::getInstance();
+            $db->query(
+                "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)",
+                [
+                    $currentUser['id'],
+                    'terminal_blocked',
+                    'BLOCKED command: ' . substr($command, 0, 200),
+                    $_SERVER['REMOTE_ADDR']
+                ]
+            );
+
             echo json_encode([
                 'success' => false,
-                'error' => 'Command blocked for security reasons'
+                'error' => 'Command blocked for security reasons. This action has been logged.'
             ]);
             exit;
         }
     }
-    
+
     // Log command execution
     $db = Database::getInstance();
-    $db->execute(
+    $db->query(
         "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)",
         [
             $currentUser['id'],
@@ -78,22 +128,28 @@ if ($action === 'exec') {
             $_SERVER['REMOTE_ADDR']
         ]
     );
-    
-    // Execute command
+
+    // Execute command with timeout and proper escaping
     $output = '';
     $returnCode = 0;
-    
-    // Change to root directory for execution
-    $fullCommand = "cd /root && " . $command . " 2>&1";
+
+    // Use sudo to execute as root, with a timeout of 30 seconds
+    $fullCommand = sprintf(
+        'timeout 30 bash -c %s 2>&1',
+        escapeshellarg('cd /opt/serveros && ' . $command)
+    );
+
     exec($fullCommand, $outputLines, $returnCode);
-    
+
     $output = implode("\n", $outputLines);
-    
-    // Add return code if non-zero
-    if ($returnCode !== 0 && empty($output)) {
+
+    // Handle timeout
+    if ($returnCode === 124) {
+        $output = "Command timed out after 30 seconds";
+    } elseif ($returnCode !== 0 && empty($output)) {
         $output = "Command exited with code: $returnCode";
     }
-    
+
     echo json_encode([
         'success' => true,
         'output' => $output,

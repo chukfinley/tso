@@ -65,10 +65,6 @@ $pageTitle = 'Login';
 
                 <button type="submit" class="btn btn-primary btn-block">Login</button>
             </form>
-
-            <div style="margin-top: 20px; text-align: center; color: #666; font-size: 12px;">
-                Default credentials: <strong>admin</strong> / <strong>admin123</strong>
-            </div>
         </div>
     </div>
 

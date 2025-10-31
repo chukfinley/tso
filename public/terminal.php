@@ -18,7 +18,7 @@ if ($currentUser['role'] !== 'admin') {
 
 // Log terminal access
 $db = Database::getInstance();
-$db->execute(
+$db->query(
     "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)",
     [
         $currentUser['id'],
@@ -241,6 +241,7 @@ function initTerminal() {
 }
 
 function initSession() {
+    updateConnectionStatus('connecting');
     fetch('/api/terminal-exec.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -250,16 +251,40 @@ function initSession() {
     .then(data => {
         if (data.success) {
             sessionId = data.session_id;
-            term.write('\x1b[32mServerOS Web Terminal\x1b[0m\r\n');
-            term.write('Type commands and press Enter. Type "exit" to close.\r\n\r\n');
+            updateConnectionStatus('connected');
+            term.write('\x1b[32m╔══════════════════════════════════════╗\x1b[0m\r\n');
+            term.write('\x1b[32m║     ServerOS Web Terminal v1.0       ║\x1b[0m\r\n');
+            term.write('\x1b[32m╚══════════════════════════════════════╝\x1b[0m\r\n\r\n');
+            term.write('\x1b[33mType commands and press Enter.\x1b[0m\r\n');
+            term.write('\x1b[33mType "clear" to clear screen.\x1b[0m\r\n');
+            term.write('\x1b[33mSession ID: ' + sessionId.substring(0, 16) + '...\x1b[0m\r\n\r\n');
+            term.write('\x1b[36mNote: Commands timeout after 30 seconds.\x1b[0m\r\n');
+            term.write('\x1b[36mWorking directory: /opt/serveros\x1b[0m\r\n\r\n');
             term.write('$ ');
         } else {
-            term.write('\x1b[31mFailed to initialize terminal session\x1b[0m\r\n');
+            updateConnectionStatus('disconnected');
+            term.write('\x1b[31m✗ Failed to initialize terminal session\x1b[0m\r\n');
+            term.write('\x1b[31mError: ' + (data.error || 'Unknown error') + '\x1b[0m\r\n');
         }
     })
     .catch(error => {
-        term.write('\x1b[31mError: ' + error.message + '\x1b[0m\r\n');
+        updateConnectionStatus('disconnected');
+        term.write('\x1b[31m✗ Connection error: ' + error.message + '\x1b[0m\r\n');
     });
+}
+
+function updateConnectionStatus(status) {
+    const statusEl = document.getElementById('connection-status');
+    if (status === 'connected') {
+        statusEl.textContent = '● Connected';
+        statusEl.className = 'connection-status connected';
+    } else if (status === 'connecting') {
+        statusEl.textContent = '○ Connecting...';
+        statusEl.className = 'connection-status';
+    } else {
+        statusEl.textContent = '● Disconnected';
+        statusEl.className = 'connection-status disconnected';
+    }
 }
 
 function executeCommand(command) {
@@ -271,14 +296,24 @@ function executeCommand(command) {
     term.write('\r\n');
 
     if (command.toLowerCase() === 'exit') {
-        term.write('\x1b[33mBye!\x1b[0m\r\n');
+        term.write('\x1b[33m╔════════════════════════════╗\x1b[0m\r\n');
+        term.write('\x1b[33m║  Goodbye! Session ended.  ║\x1b[0m\r\n');
+        term.write('\x1b[33m╚════════════════════════════╝\x1b[0m\r\n\r\n');
+        term.write('\x1b[90mRefresh the page to start a new session.\x1b[0m\r\n');
+        updateConnectionStatus('disconnected');
         commandBuffer = '';
+        sessionId = null;
         return;
     }
 
     if (command.toLowerCase() === 'clear') {
         term.clear();
         term.write('$ ');
+        return;
+    }
+
+    if (!sessionId) {
+        term.write('\x1b[31m✗ No active session. Please reconnect.\x1b[0m\r\n$ ');
         return;
     }
 
@@ -297,13 +332,25 @@ function executeCommand(command) {
             if (data.output) {
                 term.write(data.output.replace(/\n/g, '\r\n'));
             }
+            if (data.return_code !== undefined && data.return_code !== 0 && !data.output) {
+                term.write('\x1b[33m(exit code: ' + data.return_code + ')\x1b[0m');
+            }
+            term.write('\r\n');
         } else {
-            term.write('\x1b[31mError: ' + (data.error || 'Command failed') + '\x1b[0m\r\n');
+            term.write('\x1b[31m✗ Error: ' + (data.error || 'Command failed') + '\x1b[0m\r\n');
+
+            // Handle session errors
+            if (data.error && (data.error.includes('session') || data.error.includes('expired'))) {
+                term.write('\x1b[33m→ Use the "Reconnect" button to start a new session.\x1b[0m\r\n');
+                updateConnectionStatus('disconnected');
+                sessionId = null;
+            }
         }
         term.write('$ ');
     })
     .catch(error => {
-        term.write('\x1b[31mError: ' + error.message + '\x1b[0m\r\n');
+        term.write('\x1b[31m✗ Connection error: ' + error.message + '\x1b[0m\r\n');
+        term.write('\x1b[33m→ Check your connection or try reconnecting.\x1b[0m\r\n');
         term.write('$ ');
     });
 }
