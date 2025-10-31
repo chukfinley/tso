@@ -20,7 +20,20 @@ document.addEventListener('DOMContentLoaded', function() {
 // ============ Share Operations ============
 
 function loadShares() {
-    fetch('/api/share-control.php?action=list')
+    const container = document.getElementById('shares-list');
+    
+    // Show loading message
+    if (container) {
+        container.innerHTML = '<p style="color: #666;">Loading shares...</p>';
+    }
+    
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    fetch('/api/share-control.php?action=list', {
+        signal: controller.signal
+    })
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -30,21 +43,38 @@ function loadShares() {
                 return response.json();
             } else {
                 return response.text().then(text => {
+                    console.error('Non-JSON response:', text);
                     throw new Error(`Expected JSON, got: ${text.substring(0, 100)}`);
                 });
             }
         })
         .then(data => {
+            clearTimeout(timeoutId);
             if (data.success) {
                 allShares = data.shares || [];
                 displayShares(allShares);
             } else {
-                showError('Failed to load shares: ' + (data.error || 'Unknown error'));
+                const errorMsg = 'Failed to load shares: ' + (data.error || 'Unknown error');
+                console.error('API error:', errorMsg);
+                if (container) {
+                    container.innerHTML = `<p style="color: #f44336;">Error: ${escapeHtml(data.error || 'Unknown error')}</p>`;
+                }
+                showError(errorMsg);
             }
         })
         .catch(error => {
+            clearTimeout(timeoutId);
             console.error('Error loading shares:', error);
-            showError('Failed to load shares: ' + error.message);
+            let errorMsg = 'Failed to load shares: ';
+            if (error.name === 'AbortError') {
+                errorMsg += 'Request timed out. The server may be slow or unreachable.';
+            } else {
+                errorMsg += error.message;
+            }
+            if (container) {
+                container.innerHTML = `<p style="color: #f44336;">Error: ${escapeHtml(errorMsg)}</p><p style="color: #888; font-size: 12px; margin-top: 10px;">Check browser console for details.</p>`;
+            }
+            showError(errorMsg);
         });
 }
 

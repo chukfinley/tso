@@ -2,6 +2,9 @@
 /**
  * Share Management API
  */
+// Start output buffering to catch any accidental output
+ob_start();
+
 header('Content-Type: application/json');
 
 try {
@@ -10,6 +13,9 @@ try {
     require_once SRC_PATH . '/User.php';
     require_once SRC_PATH . '/Auth.php';
     require_once SRC_PATH . '/Share.php';
+    
+    // Clear any output that might have been generated during requires
+    ob_clean();
 
     $auth = new Auth();
 
@@ -280,8 +286,13 @@ try {
         default:
             throw new Exception("Invalid action: $action");
     }
+    
+    // Clear output buffer before sending response
+    ob_end_clean();
 
 } catch (Exception $e) {
+    // Clear output buffer on error
+    ob_end_clean();
     http_response_code(400);
     echo json_encode([
         'success' => false,
@@ -289,6 +300,7 @@ try {
     ]);
 } catch (Error $e) {
     // Catch fatal errors (PHP 7+)
+    ob_end_clean();
     http_response_code(500);
     echo json_encode([
         'success' => false,
@@ -296,6 +308,7 @@ try {
     ]);
 } catch (Throwable $e) {
     // Catch any other throwable (PHP 7+)
+    ob_end_clean();
     http_response_code(500);
     echo json_encode([
         'success' => false,
