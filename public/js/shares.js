@@ -55,9 +55,13 @@ function loadShares() {
                 displayShares(allShares);
             } else {
                 const errorMsg = 'Failed to load shares: ' + (data.error || 'Unknown error');
-                console.error('API error:', errorMsg);
+                console.error('API error:', data);
+                let errorHtml = `<p style="color: #f44336; font-weight: bold;">Error: ${escapeHtml(data.error || 'Unknown error')}</p>`;
+                if (data.file || data.line) {
+                    errorHtml += `<p style="color: #888; font-size: 12px; margin-top: 5px;">Location: ${escapeHtml((data.file || 'unknown') + ':' + (data.line || 'unknown'))}</p>`;
+                }
                 if (container) {
-                    container.innerHTML = `<p style="color: #f44336;">Error: ${escapeHtml(data.error || 'Unknown error')}</p>`;
+                    container.innerHTML = errorHtml;
                 }
                 showError(errorMsg);
             }

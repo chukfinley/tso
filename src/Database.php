@@ -19,7 +19,8 @@ class Database {
                 ]
             );
         } catch (PDOException $e) {
-            die("Database connection failed: " . $e->getMessage());
+            // Throw exception instead of die() so it can be caught by API error handlers
+            throw new Exception("Database connection failed: " . $e->getMessage());
         }
     }
 

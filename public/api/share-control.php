@@ -292,27 +292,43 @@ try {
 
 } catch (Exception $e) {
     // Clear output buffer on error
-    ob_end_clean();
+    $output = ob_get_clean();
     http_response_code(400);
     echo json_encode([
         'success' => false,
-        'error' => $e->getMessage()
+        'error' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
     ]);
 } catch (Error $e) {
     // Catch fatal errors (PHP 7+)
-    ob_end_clean();
+    $output = ob_get_clean();
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => 'Internal server error: ' . $e->getMessage()
+        'error' => 'Internal server error: ' . $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString()
     ]);
 } catch (Throwable $e) {
     // Catch any other throwable (PHP 7+)
-    ob_end_clean();
+    $output = ob_get_clean();
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => 'Unexpected error: ' . $e->getMessage()
+        'error' => 'Unexpected error: ' . $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine()
+    ]);
+}
+
+// Catch any errors that happen after ob_end_clean() is called
+if (!headers_sent() && http_response_code() === false) {
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'error' => 'Fatal error occurred before error handling'
     ]);
 }
 
