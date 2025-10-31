@@ -6,7 +6,8 @@
 ################################################################################
 
 # Ensure script is running with bash (not sh)
-if [ -z "$BASH_VERSION" ]; then
+# Only re-exec if running from a file (not piped from stdin)
+if [ -z "$BASH_VERSION" ] && [ -f "$0" ]; then
     exec bash "$0" "$@"
 fi
 

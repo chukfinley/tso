@@ -107,23 +107,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($action === 'change_password') {
         $userId = intval($_POST['user_id'] ?? 0);
+        $oldPassword = $_POST['old_password'] ?? '';
         $newPassword = $_POST['new_password'] ?? '';
-        
+
         if ($userId > 0 && strlen($newPassword) >= PASSWORD_MIN_LENGTH) {
-            $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
-            if ($userModel->update($userId, ['password' => $hashedPassword])) {
-                $message = 'Password changed successfully!';
-                $messageType = 'success';
-                
-                // Log activity
-                $targetUser = $userModel->getById($userId);
-                $db->query(
-                    "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)",
-                    [$_SESSION['user_id'], 'password_change', "Changed password for user: {$targetUser['username']}", $_SERVER['REMOTE_ADDR']]
-                );
-            } else {
-                $message = 'Failed to change password.';
+            // Get the user to verify old password
+            $targetUser = $userModel->getById($userId);
+
+            if (!$targetUser) {
+                $message = 'User not found.';
                 $messageType = 'error';
+            } elseif (!password_verify($oldPassword, $targetUser['password'])) {
+                $message = 'Incorrect old password.';
+                $messageType = 'error';
+            } else {
+                $hashedPassword = password_hash($newPassword, PASSWORD_BCRYPT);
+                if ($userModel->update($userId, ['password' => $hashedPassword])) {
+                    $message = 'Password changed successfully!';
+                    $messageType = 'success';
+
+                    // Log activity
+                    $db->query(
+                        "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)",
+                        [$_SESSION['user_id'], 'password_change', "Changed password for user: {$targetUser['username']}", $_SERVER['REMOTE_ADDR']]
+                    );
+                } else {
+                    $message = 'Failed to change password.';
+                    $messageType = 'error';
+                }
             }
         } else {
             $message = 'Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters long.';
@@ -302,17 +313,22 @@ $pageTitle = 'User Management';
         <form method="POST" action="">
             <input type="hidden" name="action" value="change_password">
             <input type="hidden" name="user_id" id="password_user_id">
-            
+
+            <div class="form-group">
+                <label for="old_password">Old Password *</label>
+                <input type="password" id="old_password" name="old_password" class="form-control" required>
+            </div>
+
             <div class="form-group">
                 <label for="new_password">New Password * (min. <?php echo PASSWORD_MIN_LENGTH; ?> characters)</label>
                 <input type="password" id="new_password" name="new_password" class="form-control" required minlength="<?php echo PASSWORD_MIN_LENGTH; ?>">
             </div>
-            
+
             <div class="form-group">
                 <label for="confirm_password">Confirm Password *</label>
                 <input type="password" id="confirm_password" class="form-control" required minlength="<?php echo PASSWORD_MIN_LENGTH; ?>">
             </div>
-            
+
             <div style="display: flex; gap: 10px; margin-top: 20px;">
                 <button type="submit" class="btn btn-primary" onclick="return validatePassword()">Change Password</button>
                 <button type="button" onclick="closePasswordModal()" class="btn btn-secondary">Cancel</button>
@@ -338,6 +354,7 @@ function closeEditModal() {
 function openPasswordModal(userId, username) {
     document.getElementById('password_user_id').value = userId;
     document.getElementById('password_username').textContent = username;
+    document.getElementById('old_password').value = '';
     document.getElementById('new_password').value = '';
     document.getElementById('confirm_password').value = '';
     document.getElementById('passwordModal').style.display = 'flex';
