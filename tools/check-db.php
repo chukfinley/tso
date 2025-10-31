@@ -6,7 +6,7 @@
  */
 
 echo "╔════════════════════════════════════════════════════════════════╗\n";
-echo "║         ServerOS Database Diagnostic Tool                      ║\n";
+echo "║           TSO Database Diagnostic Tool                         ║\n";
 echo "╚════════════════════════════════════════════════════════════════╝\n\n";
 
 // Determine installation directory

@@ -1,6 +1,6 @@
-# ServerOS Troubleshooting Tools
+# TSO Troubleshooting Tools
 
-These utilities help diagnose and fix common issues with ServerOS.
+These utilities help diagnose and fix common issues with TSO.
 
 ## Available Tools
 
@@ -22,7 +22,7 @@ sudo /opt/serveros/tools/check-db.php
 **Example Output:**
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║         ServerOS Database Diagnostic Tool                      ║
+║         TSO Database Diagnostic Tool                      ║
 ╚════════════════════════════════════════════════════════════════╝
 
 ✓ Config found: /opt/serveros/config/config.php
@@ -79,7 +79,7 @@ sudo /opt/serveros/tools/reset-admin.php
 **Example Output:**
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║         ServerOS Admin Password Reset Utility                  ║
+║         TSO Admin Password Reset Utility                  ║
 ╚════════════════════════════════════════════════════════════════╝
 
 ✓ Connected to database

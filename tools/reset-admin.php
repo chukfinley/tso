@@ -6,7 +6,7 @@
  */
 
 echo "╔════════════════════════════════════════════════════════════════╗\n";
-echo "║         ServerOS Admin Password Reset Utility                  ║\n";
+echo "║           TSO Admin Password Reset Utility                     ║\n";
 echo "╚════════════════════════════════════════════════════════════════╝\n\n";
 
 // Determine installation directory
