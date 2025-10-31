@@ -325,27 +325,6 @@ try {
 
 // Catch any errors that happen after ob_end_clean() is called
 if (!headers_sent() && http_response_code() === false) {
-    // Try to log this error too
-    try {
-        if ($logger === null) {
-            require_once __DIR__ . '/../../config/config.php';
-            require_once SRC_PATH . '/Logger.php';
-            $logger = Logger::getInstance();
-        }
-        $action = $_GET['action'] ?? $_POST['action'] ?? 'unknown';
-        $context = [
-            'type' => 'api_error',
-            'exception_type' => 'FatalError',
-            'action' => $action,
-            'request_uri' => $_SERVER['REQUEST_URI'] ?? 'unknown',
-            'request_method' => $_SERVER['REQUEST_METHOD'] ?? 'unknown',
-            'message' => 'Fatal error occurred before error handling'
-        ];
-        $logger->error('Share API Fatal Error: Fatal error occurred before error handling', $context);
-    } catch (Exception $logError) {
-        error_log("Failed to log fatal error: " . $logError->getMessage());
-    }
-    
     http_response_code(500);
     echo json_encode([
         'success' => false,
