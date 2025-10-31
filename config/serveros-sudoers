@@ -1,0 +1,7 @@
+# ServerOS - Allow web server to run update script
+# This file should be copied to /etc/sudoers.d/serveros
+
+# Allow www-data to run update script without password
+www-data ALL=(ALL) NOPASSWD: /opt/serveros/update.sh
+www-data ALL=(ALL) NOPASSWD: /usr/bin/bash /opt/serveros/update.sh
+

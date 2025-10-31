@@ -330,6 +330,19 @@ set_permissions() {
     print_success "Permissions set"
 }
 
+configure_sudo() {
+    print_info "Configuring sudo permissions for web UI updates..."
+    
+    # Copy sudoers file
+    if [ -f "${INSTALL_DIR}/config/serveros-sudoers" ]; then
+        cp "${INSTALL_DIR}/config/serveros-sudoers" /etc/sudoers.d/serveros
+        chmod 0440 /etc/sudoers.d/serveros
+        print_success "Sudo permissions configured"
+    else
+        print_warning "Sudoers config not found, skipping"
+    fi
+}
+
 restart_services() {
     print_info "Restarting services..."
 
@@ -481,6 +494,9 @@ perform_update() {
 
     # Update permissions
     set_permissions
+    
+    # Configure sudo permissions
+    configure_sudo
 
     # Restart services
     restart_services
@@ -557,6 +573,7 @@ main() {
         create_admin_user
         configure_apache
         set_permissions
+        configure_sudo
         configure_firewall
         restart_services
         
