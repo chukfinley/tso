@@ -113,8 +113,8 @@ run_installer() {
     # Make installer executable
     chmod +x install.sh
 
-    # Run the actual installer
-    ./install.sh
+    # Run the actual installer with --force flag for non-interactive updates
+    ./install.sh --force
 }
 
 cleanup() {

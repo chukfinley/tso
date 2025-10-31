@@ -463,6 +463,7 @@ perform_update() {
         cp -r "${SCRIPT_DIR}/src" ${INSTALL_DIR}/ 2>/dev/null || true
         cp -r "${SCRIPT_DIR}/views" ${INSTALL_DIR}/ 2>/dev/null || true
         cp -r "${SCRIPT_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
+        cp -r "${SCRIPT_DIR}/scripts" ${INSTALL_DIR}/ 2>/dev/null || true
         cp "${SCRIPT_DIR}/init.sql" ${INSTALL_DIR}/ 2>/dev/null || true
         print_success "Application files updated"
     fi
@@ -472,6 +473,13 @@ perform_update() {
     cp /tmp/serveros-config-backup.php ${INSTALL_DIR}/config/config.php
     rm -f /tmp/serveros-config-backup.php
     print_success "Configuration restored"
+    
+    # Install/Update monitoring system
+    if [ -f "${INSTALL_DIR}/scripts/install-monitoring.sh" ]; then
+        echo ""
+        print_info "Updating monitoring system..."
+        bash "${INSTALL_DIR}/scripts/install-monitoring.sh"
+    fi
 
     # Ensure admin user exists with correct password
     create_admin_user
