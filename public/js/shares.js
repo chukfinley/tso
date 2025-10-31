@@ -15,6 +15,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Refresh every 30 seconds
     setInterval(loadSambaStatus, 30000);
+    
+    // Reload users when Users tab is shown
+    $('#users-tab').on('shown.bs.tab', function (e) {
+        loadUsers();
+    });
+    
+    // Reload shares when Shares tab is shown
+    $('#shares-tab').on('shown.bs.tab', function (e) {
+        loadShares();
+    });
+    
+    // Reload logs when Logs tab is shown
+    $('#logs-tab').on('shown.bs.tab', function (e) {
+        loadLogs();
+    });
 });
 
 // ============ Share Operations ============
@@ -418,25 +433,45 @@ function deleteShare(id, name) {
 // ============ User Operations ============
 
 function loadUsers() {
+    const container = document.getElementById('users-list');
+    
+    // Show loading message
+    if (container) {
+        container.innerHTML = '<p style="color: #666;">Loading users...</p>';
+    }
+    
     apiFetch('/api/share-control.php?action=list_users', 'list_users')
         .then(data => {
-            if (data.success) {
-                allUsers = data.users;
-                displayUsers(data.users);
+            if (data.success && data.users) {
+                allUsers = data.users || [];
+                displayUsers(allUsers);
             } else {
-                showError('Failed to load users: ' + data.error);
+                const errorMsg = data.error || 'Unknown error';
+                if (container) {
+                    container.innerHTML = `<p style="color: #f44336;">Failed to load users: ${escapeHtml(errorMsg)}</p>`;
+                }
+                showError('Failed to load users: ' + errorMsg);
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            showError('Failed to load users: ' + (error.message || 'Unknown error'));
+            console.error('Error loading users:', error);
+            const errorMsg = error.message || error.details?.error || 'Unknown error';
+            if (container) {
+                container.innerHTML = `<p style="color: #f44336;">Failed to load users: ${escapeHtml(errorMsg)}</p>`;
+            }
+            showError('Failed to load users: ' + errorMsg);
         });
 }
 
 function displayUsers(users) {
     const container = document.getElementById('users-list');
     
-    if (users.length === 0) {
+    if (!container) {
+        console.error('Users list container not found');
+        return;
+    }
+    
+    if (!users || users.length === 0) {
         container.innerHTML = '<p style="color: #666;">No users configured. Click "Create New User" to get started.</p>';
         return;
     }
@@ -520,6 +555,7 @@ function saveUser() {
             if (data.success) {
                 showSuccess(data.message);
                 $('#userModal').modal('hide');
+                // Refresh users list
                 loadUsers();
             } else {
                 showError('Failed to save user: ' + data.error);
@@ -558,6 +594,7 @@ function toggleUser(id) {
         .then(data => {
             if (data.success) {
                 showSuccess(data.message);
+                // Refresh users list
                 loadUsers();
             } else {
                 showError('Failed to toggle user: ' + data.error);
@@ -585,6 +622,7 @@ function deleteUser(id, username) {
         .then(data => {
             if (data.success) {
                 showSuccess(data.message);
+                // Refresh users list
                 loadUsers();
             } else {
                 showError('Failed to delete user: ' + data.error);
