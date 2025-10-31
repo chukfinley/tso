@@ -132,6 +132,22 @@ install_dependencies() {
     usermod -aG libvirt www-data > /dev/null 2>&1 || true
 
     print_success "QEMU/KVM and virtualization tools installed"
+
+    print_info "Installing Samba for network shares..."
+
+    # Install Samba packages
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        samba \
+        samba-common-bin \
+        > /dev/null 2>&1
+
+    # Enable and start Samba services
+    systemctl enable smbd > /dev/null 2>&1
+    systemctl enable nmbd > /dev/null 2>&1
+    systemctl start smbd > /dev/null 2>&1
+    systemctl start nmbd > /dev/null 2>&1
+
+    print_success "Samba installed and started"
 }
 
 configure_mariadb() {
@@ -189,6 +205,18 @@ run_database_migrations() {
         print_success "Database migrations completed"
     else
         print_warning "Migration script not found, skipping..."
+    fi
+}
+
+create_default_shares() {
+    print_info "Creating default network shares..."
+
+    # Create default ISO share for VM images
+    if [[ -f "${INSTALL_DIR}/tools/create-iso-share.php" ]]; then
+        php ${INSTALL_DIR}/tools/create-iso-share.php
+        print_success "Default ISO share created"
+    else
+        print_warning "ISO share creation script not found, skipping..."
     fi
 }
 
@@ -373,16 +401,25 @@ set_permissions() {
 }
 
 configure_sudo() {
-    print_info "Configuring sudo permissions for web UI updates..."
-    
-    # Copy sudoers file
+    print_info "Configuring sudo permissions..."
+
+    # Copy main sudoers file
     if [ -f "${INSTALL_DIR}/config/serveros-sudoers" ]; then
         cp "${INSTALL_DIR}/config/serveros-sudoers" /etc/sudoers.d/serveros
         chmod 0440 /etc/sudoers.d/serveros
-        print_success "Sudo permissions configured"
     else
-        print_warning "Sudoers config not found, skipping"
+        print_warning "Main sudoers config not found"
     fi
+
+    # Copy Samba sudoers file
+    if [ -f "${INSTALL_DIR}/config/samba-sudoers" ]; then
+        cp "${INSTALL_DIR}/config/samba-sudoers" /etc/sudoers.d/serveros-samba
+        chmod 0440 /etc/sudoers.d/serveros-samba
+    else
+        print_warning "Samba sudoers config not found"
+    fi
+
+    print_success "Sudo permissions configured"
 }
 
 restart_services() {
@@ -537,6 +574,9 @@ perform_update() {
     # Run database migrations
     run_database_migrations
 
+    # Create default shares
+    create_default_shares
+
     # Update permissions
     set_permissions
 
@@ -617,6 +657,7 @@ main() {
         configure_app
         create_admin_user
         run_database_migrations
+        create_default_shares
         configure_apache
         set_permissions
         configure_sudo

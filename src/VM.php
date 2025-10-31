@@ -6,7 +6,7 @@
 class VM {
     private $db;
     private $vmDir = '/opt/serveros/vms';
-    private $isoDir = '/opt/serveros/vms/iso';
+    private $isoDir = '/opt/serveros/storage/isos';
     private $logDir = '/opt/serveros/logs/vms';
 
     public function __construct() {
