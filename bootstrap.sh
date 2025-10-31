@@ -56,6 +56,42 @@ print_info() {
     echo -e "${BLUE}ℹ $1${NC}"
 }
 
+# Error checking function
+run_command() {
+    local cmd="$1"
+    local description="$2"
+    local exit_on_error="${3:-true}"  # Default to exit on error
+    
+    # Run command and capture output
+    local output
+    local exit_code
+    
+    if output=$(eval "$cmd" 2>&1); then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+    
+    if [[ $exit_code -ne 0 ]]; then
+        print_error "Failed: $description"
+        echo ""
+        echo -e "${RED}Command:${NC} $cmd"
+        echo -e "${RED}Exit Code:${NC} $exit_code"
+        echo -e "${RED}Output:${NC}"
+        echo "$output" | sed 's/^/  /'
+        echo ""
+        
+        if [[ "$exit_on_error" == "true" ]]; then
+            print_error "Aborting bootstrap installation due to error."
+            exit 1
+        else
+            return $exit_code
+        fi
+    fi
+    
+    return 0
+}
+
 check_root() {
     if [[ $EUID -ne 0 ]]; then
         print_error "This script must be run as root or with sudo"
@@ -101,12 +137,11 @@ clone_repository() {
     rm -rf "${TEMP_DIR}"
 
     # Clone repository
-    if git clone --depth 1 "${REPO_URL}" "${TEMP_DIR}" > /dev/null 2>&1; then
-        print_success "Repository cloned successfully"
-    else
-        print_error "Failed to clone repository from ${REPO_URL}"
-        exit 1
-    fi
+    run_command \
+        "git clone --depth 1 '${REPO_URL}' '${TEMP_DIR}' 2>&1" \
+        "Clone ServerOS repository from GitHub"
+    
+    print_success "Repository cloned successfully"
 }
 
 check_existing_installation() {

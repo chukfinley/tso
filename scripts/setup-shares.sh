@@ -25,6 +25,42 @@ print_info() {
     echo -e "${YELLOW}ℹ $1${NC}"
 }
 
+# Error checking function
+run_command() {
+    local cmd="$1"
+    local description="$2"
+    local exit_on_error="${3:-true}"  # Default to exit on error
+    
+    # Run command and capture output
+    local output
+    local exit_code
+    
+    if output=$(eval "$cmd" 2>&1); then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+    
+    if [[ $exit_code -ne 0 ]]; then
+        print_error "Failed: $description"
+        echo ""
+        echo -e "${RED}Command:${NC} $cmd"
+        echo -e "${RED}Exit Code:${NC} $exit_code"
+        echo -e "${RED}Output:${NC}"
+        echo "$output" | sed 's/^/  /'
+        echo ""
+        
+        if [[ "$exit_on_error" == "true" ]]; then
+            print_error "Aborting due to error."
+            exit 1
+        else
+            return $exit_code
+        fi
+    fi
+    
+    return 0
+}
+
 check_root() {
     if [ "$EUID" -ne 0 ]; then 
         print_error "This script must be run as root"
@@ -50,11 +86,18 @@ install_samba() {
     
     case "$OS" in
         ubuntu|debian)
-            apt update
-            apt install -y samba samba-common-bin
+            run_command \
+                "apt update 2>&1" \
+                "Update package lists"
+            
+            run_command \
+                "apt install -y samba samba-common-bin 2>&1" \
+                "Install Samba packages"
             ;;
         centos|rhel|fedora)
-            yum install -y samba samba-client
+            run_command \
+                "yum install -y samba samba-client 2>&1" \
+                "Install Samba packages"
             ;;
         *)
             print_error "Unsupported OS: $OS"

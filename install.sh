@@ -58,6 +58,64 @@ print_info() {
     echo -e "${BLUE}ℹ $1${NC}"
 }
 
+# Error checking function
+run_command() {
+    local cmd="$1"
+    local description="$2"
+    local exit_on_error="${3:-true}"  # Default to exit on error
+    
+    # Run command and capture output
+    local output
+    local exit_code
+    
+    if output=$(eval "$cmd" 2>&1); then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+    
+    if [[ $exit_code -ne 0 ]]; then
+        print_error "Failed: $description"
+        echo ""
+        echo -e "${RED}Command:${NC} $cmd"
+        echo -e "${RED}Exit Code:${NC} $exit_code"
+        echo -e "${RED}Output:${NC}"
+        echo "$output" | sed 's/^/  /'
+        echo ""
+        
+        if [[ "$exit_on_error" == "true" ]]; then
+            print_error "Aborting installation due to error."
+            exit 1
+        else
+            return $exit_code
+        fi
+    fi
+    
+    return 0
+}
+
+# Verify service is running
+verify_service() {
+    local service="$1"
+    local description="$2"
+    
+    # Wait a moment for service to start
+    sleep 2
+    
+    if systemctl is-active --quiet "$service"; then
+        print_success "$description is running"
+        return 0
+    else
+        print_error "$description failed to start"
+        echo ""
+        echo -e "${RED}Service Status:${NC}"
+        systemctl status "$service" --no-pager -l || true
+        echo ""
+        print_error "Please check the service logs and configuration."
+        exit 1
+    fi
+}
+
 check_root() {
     if [[ $EUID -ne 0 ]]; then
         print_error "This script must be run as root or with sudo"
@@ -79,8 +137,14 @@ check_os() {
 
 update_system() {
     print_info "Updating system packages..."
-    apt-get update -qq
-    apt-get upgrade -y -qq
+    run_command \
+        "apt-get update -qq 2>&1" \
+        "Update package lists"
+    
+    run_command \
+        "apt-get upgrade -y -qq 2>&1" \
+        "Upgrade system packages"
+    
     print_success "System updated"
 }
 
@@ -171,12 +235,22 @@ create_database() {
     print_info "Creating database and user..."
 
     # Create database
-    mysql -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};"
+    run_command \
+        "mysql -e 'CREATE DATABASE IF NOT EXISTS ${DB_NAME};' 2>&1" \
+        "Create database ${DB_NAME}"
 
     # Create user with password
-    mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';"
-    mysql -e "GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';"
-    mysql -e "FLUSH PRIVILEGES;"
+    run_command \
+        "mysql -e \"CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASS}';\" 2>&1" \
+        "Create database user ${DB_USER}"
+    
+    run_command \
+        "mysql -e \"GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';\" 2>&1" \
+        "Grant privileges to database user"
+    
+    run_command \
+        "mysql -e 'FLUSH PRIVILEGES;' 2>&1" \
+        "Flush MySQL privileges"
 
     print_success "Database '${DB_NAME}' created"
 }
@@ -188,10 +262,13 @@ import_schema() {
     SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
     if [[ -f "${SCRIPT_DIR}/init.sql" ]]; then
-        mysql ${DB_NAME} < "${SCRIPT_DIR}/init.sql"
+        run_command \
+            "mysql ${DB_NAME} < '${SCRIPT_DIR}/init.sql' 2>&1" \
+            "Import database schema"
         print_success "Database schema imported"
     else
         print_error "init.sql not found!"
+        print_error "Expected location: ${SCRIPT_DIR}/init.sql"
         exit 1
     fi
 }
@@ -368,15 +445,19 @@ DNS.2 = localhost
 EOF
 
     # Generate private key and certificate
-    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-        -keyout ${SSL_DIR}/serveros.key \
-        -out ${SSL_DIR}/serveros.crt \
-        -config /tmp/serveros-ssl.conf \
-        -extensions v3_req > /dev/null 2>&1
+    run_command \
+        "openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout ${SSL_DIR}/serveros.key -out ${SSL_DIR}/serveros.crt -config /tmp/serveros-ssl.conf -extensions v3_req 2>&1" \
+        "Generate SSL certificate"
 
     # Set proper permissions
-    chmod 600 ${SSL_DIR}/serveros.key
-    chmod 644 ${SSL_DIR}/serveros.crt
+    run_command \
+        "chmod 600 ${SSL_DIR}/serveros.key" \
+        "Set SSL key permissions"
+    
+    run_command \
+        "chmod 644 ${SSL_DIR}/serveros.crt" \
+        "Set SSL certificate permissions"
+    
     rm -f /tmp/serveros-ssl.conf
 
     print_success "SSL certificate generated"
@@ -447,16 +528,38 @@ EOF
 EOF
 
     # Enable required Apache modules
-    a2enmod rewrite > /dev/null 2>&1
-    a2enmod headers > /dev/null 2>&1
-    a2enmod ssl > /dev/null 2>&1
-    a2enmod php$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;') > /dev/null 2>&1 || true
+    run_command \
+        "a2enmod rewrite 2>&1" \
+        "Enable Apache rewrite module"
+    
+    run_command \
+        "a2enmod headers 2>&1" \
+        "Enable Apache headers module"
+    
+    run_command \
+        "a2enmod ssl 2>&1" \
+        "Enable Apache SSL module"
+
+    PHP_VERSION=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo "")
+    if [[ -n "$PHP_VERSION" ]]; then
+        run_command \
+            "a2enmod php${PHP_VERSION} 2>&1" \
+            "Enable Apache PHP module" \
+            "false"  # Don't exit on error for PHP module
+    fi
 
     # Disable default site
     a2dissite 000-default > /dev/null 2>&1 || true
 
     # Enable TSO site
-    a2ensite serveros > /dev/null 2>&1
+    run_command \
+        "a2ensite serveros 2>&1" \
+        "Enable TSO Apache site"
+
+    # Test Apache configuration
+    run_command \
+        "apache2ctl configtest 2>&1" \
+        "Test Apache configuration"
 
     print_success "Apache configured with SSL/HTTPS"
 }
@@ -505,10 +608,29 @@ configure_sudo() {
 restart_services() {
     print_info "Restarting services..."
 
-    systemctl restart apache2
-    systemctl enable apache2 > /dev/null 2>&1
+    # Restart Apache
+    run_command \
+        "systemctl restart apache2 2>&1" \
+        "Restart Apache service"
+    
+    # Enable Apache to start on boot
+    run_command \
+        "systemctl enable apache2 2>&1" \
+        "Enable Apache on boot"
 
-    print_success "Services restarted"
+    # Verify Apache is running
+    verify_service "apache2" "Apache2"
+    
+    # Verify SSL is working by checking if SSL module is loaded
+    if apache2ctl -M 2>/dev/null | grep -q ssl_module; then
+        print_success "Apache SSL module is loaded"
+    else
+        print_warning "Apache SSL module may not be loaded - HTTPS may not work"
+        echo "Checking Apache configuration..."
+        apache2ctl -M 2>&1 | grep -i ssl || true
+    fi
+    
+    print_success "Services restarted and verified"
 }
 
 configure_firewall() {

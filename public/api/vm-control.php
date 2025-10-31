@@ -24,17 +24,58 @@ if (!$auth->isLoggedIn()) {
 $vm = new VM();
 $db = Database::getInstance();
 
-// Get JSON input
-$input = json_decode(file_get_contents('php://input'), true);
-$action = $input['action'] ?? $_GET['action'] ?? '';
-$vmId = $input['vm_id'] ?? $_GET['vm_id'] ?? 0;
+// Get JSON input (only if not multipart/form-data)
+$input = [];
+if (!empty($_POST) && isset($_POST['action'])) {
+    // Handle form data
+    $input = $_POST;
+} else {
+    // Try to read JSON input (not available for multipart/form-data)
+    $jsonInput = @file_get_contents('php://input');
+    if ($jsonInput !== false && !empty($jsonInput)) {
+        $decoded = json_decode($jsonInput, true);
+        if ($decoded !== null) {
+            $input = $decoded;
+        }
+    }
+}
+$action = $input['action'] ?? $_GET['action'] ?? $_POST['action'] ?? '';
+$vmId = $input['vm_id'] ?? $_GET['vm_id'] ?? $_POST['vm_id'] ?? 0;
 
 try {
     switch ($action) {
         case 'upload_iso':
             // Handle file upload
-            if (!isset($_FILES['iso_file']) || $_FILES['iso_file']['error'] !== UPLOAD_ERR_OK) {
-                throw new Exception('No file uploaded or upload error occurred');
+            if (!isset($_FILES['iso_file'])) {
+                // Check if POST data was received (might indicate file size exceeded limits)
+                if (empty($_POST) && empty($_FILES) && !empty($_SERVER['CONTENT_LENGTH'])) {
+                    $contentLength = intval($_SERVER['CONTENT_LENGTH']);
+                    $postMaxSize = $this->parseSize(ini_get('post_max_size'));
+                    $uploadMaxSize = $this->parseSize(ini_get('upload_max_filesize'));
+                    $maxSize = max($postMaxSize, $uploadMaxSize);
+                    
+                    if ($contentLength > $maxSize) {
+                        throw new Exception('File size exceeds PHP limit. Maximum allowed: ' . $this->formatBytes($maxSize) . '. Check upload_max_filesize and post_max_size in php.ini');
+                    }
+                }
+                throw new Exception('No file uploaded. Please check file size limits (upload_max_filesize, post_max_size) and try again.');
+            }
+            
+            // Check for specific upload errors
+            $uploadError = $_FILES['iso_file']['error'];
+            if ($uploadError !== UPLOAD_ERR_OK) {
+                $errorMessages = [
+                    UPLOAD_ERR_INI_SIZE => 'File exceeds upload_max_filesize directive in php.ini',
+                    UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE directive in HTML form',
+                    UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
+                    UPLOAD_ERR_NO_FILE => 'No file was uploaded',
+                    UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
+                    UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
+                    UPLOAD_ERR_EXTENSION => 'PHP extension stopped the file upload'
+                ];
+                
+                $errorMsg = $errorMessages[$uploadError] ?? 'Unknown upload error (code: ' . $uploadError . ')';
+                throw new Exception('Upload error: ' . $errorMsg);
             }
 
             $uploadedFile = $_FILES['iso_file'];
@@ -126,6 +167,19 @@ try {
                 $pow = min($pow, count($units) - 1);
                 $bytes /= pow(1024, $pow);
                 return round($bytes, $precision) . ' ' . $units[$pow];
+            };
+            
+            // Helper function to parse PHP size strings (e.g., "2M" -> 2097152)
+            $parseSize = function($size) {
+                $size = trim($size);
+                $last = strtolower($size[strlen($size)-1]);
+                $size = intval($size);
+                switch($last) {
+                    case 'g': $size *= 1024;
+                    case 'm': $size *= 1024;
+                    case 'k': $size *= 1024;
+                }
+                return $size;
             };
 
             // Clear output buffer to ensure clean JSON

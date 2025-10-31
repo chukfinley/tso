@@ -49,6 +49,42 @@ print_info() {
     echo -e "${BLUE}ℹ $1${NC}"
 }
 
+# Error checking function
+run_command() {
+    local cmd="$1"
+    local description="$2"
+    local exit_on_error="${3:-true}"  # Default to exit on error
+    
+    # Run command and capture output
+    local output
+    local exit_code
+    
+    if output=$(eval "$cmd" 2>&1); then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+    
+    if [[ $exit_code -ne 0 ]]; then
+        print_error "Failed: $description"
+        echo ""
+        echo -e "${RED}Command:${NC} $cmd"
+        echo -e "${RED}Exit Code:${NC} $exit_code"
+        echo -e "${RED}Output:${NC}"
+        echo "$output" | sed 's/^/  /'
+        echo ""
+        
+        if [[ "$exit_on_error" == "true" ]]; then
+            print_error "Aborting update due to error."
+            exit 1
+        else
+            return $exit_code
+        fi
+    fi
+    
+    return 0
+}
+
 check_root() {
     if [[ $EUID -ne 0 ]]; then
         print_error "This script must be run as root or with sudo"
@@ -77,12 +113,11 @@ clone_latest() {
 
     rm -rf "${TEMP_DIR}"
 
-    if git clone --depth 1 "${REPO_URL}" "${TEMP_DIR}" > /dev/null 2>&1; then
-        print_success "Latest version downloaded"
-    else
-        print_error "Failed to download latest version"
-        exit 1
-    fi
+    run_command \
+        "git clone --depth 1 '${REPO_URL}' '${TEMP_DIR}' 2>&1" \
+        "Clone latest version from GitHub"
+    
+    print_success "Latest version downloaded"
 }
 
 update_files() {
@@ -166,8 +201,22 @@ ensure_admin() {
 
 restart_services() {
     print_info "Restarting Apache..."
-    systemctl restart apache2
-    print_success "Apache restarted"
+    run_command \
+        "systemctl restart apache2 2>&1" \
+        "Restart Apache service"
+
+    # Verify Apache is running
+    if systemctl is-active --quiet apache2; then
+        print_success "Apache is running"
+    else
+        print_error "Apache failed to start"
+        echo ""
+        echo -e "${RED}Service Status:${NC}"
+        systemctl status apache2 --no-pager -l || true
+        echo ""
+        print_error "Please check the Apache logs and configuration."
+        exit 1
+    fi
 }
 
 cleanup() {
@@ -196,7 +245,8 @@ show_completion() {
     echo "  ✓ Logs and storage"
     echo ""
     IP_ADDRESS=$(hostname -I | awk '{print $1}')
-    echo "Access your TSO at: ${GREEN}http://${IP_ADDRESS}${NC}"
+    echo "Access your TSO at: ${GREEN}https://${IP_ADDRESS}${NC}"
+    echo -e "${YELLOW}  Note: Using self-signed certificate (browser warnings are expected)${NC}"
     echo ""
     print_info "To update in the future:"
     echo "  • Use the web UI: Settings → System Update"
