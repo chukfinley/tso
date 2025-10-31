@@ -473,23 +473,37 @@ main() {
     check_root
     check_os
 
+    # Check for --force flag for non-interactive updates
+    FORCE_UPDATE=false
+    if [[ "$1" == "--force" ]] || [[ "$1" == "-f" ]]; then
+        FORCE_UPDATE=true
+    fi
+
     # Check if this is an update or new installation
     if detect_existing_installation; then
         echo ""
         print_warning "ServerOS is already installed at ${INSTALL_DIR}"
         echo ""
-        echo "This script can:"
-        echo "  1. Update existing installation (preserves config & database)"
-        echo "  2. Cancel and exit"
-        echo ""
-        read -p "Do you want to update? (yes/no): " -r
-        echo ""
 
-        if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        if [[ "$FORCE_UPDATE" == true ]]; then
+            print_info "Force update mode - proceeding automatically..."
             perform_update
         else
-            print_info "Update cancelled."
-            exit 0
+            echo "Options:"
+            echo "  1) Update existing installation (preserves config & database)"
+            echo "  2) Cancel and exit"
+            echo ""
+            read -p "Enter your choice (yes to update, no to cancel): " -r
+            echo ""
+
+            if [[ $REPLY =~ ^[Yy][Ee][Ss]$|^[Yy]$|^1$ ]]; then
+                perform_update
+            else
+                print_info "Update cancelled."
+                echo ""
+                print_info "To update without prompts, use: sudo ./install.sh --force"
+                exit 0
+            fi
         fi
     else
         # New installation
