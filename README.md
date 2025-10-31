@@ -96,6 +96,29 @@ sudo ./install.sh
 
 For detailed installation instructions, see [INSTALL.md](INSTALL.md)
 
+## Updating ServerOS 🔄
+
+**Important:** You can simply re-run the installer to update!
+
+```bash
+curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash
+```
+
+Or use the dedicated update script:
+
+```bash
+sudo /opt/serveros/update.sh
+```
+
+**What happens during update:**
+- ✅ Application files updated to latest version
+- ✅ Tools and utilities updated
+- ✅ **Configuration preserved** (database credentials)
+- ✅ **Database and users preserved**
+- ✅ **Logs and storage preserved**
+
+No data loss! Your settings and users are safe.
+
 ## Manual Installation
 
 If you prefer manual installation:
@@ -223,6 +246,28 @@ After installation, login with:
 - [ ] Backup and restore
 - [ ] Monitoring and alerts
 - [ ] API endpoints
+
+## Troubleshooting
+
+### Login Issues - "Invalid username or password"
+
+If you can't login after installation:
+
+```bash
+# Reset admin password
+sudo /opt/serveros/tools/reset-admin.php
+
+# Or check database status
+sudo /opt/serveros/tools/check-db.php
+```
+
+**For more issues:** See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for comprehensive solutions.
+
+### Common Issues:
+- **Can't access web interface** - Check firewall: `sudo ufw allow 80/tcp`
+- **Database errors** - Run: `sudo /opt/serveros/tools/check-db.php`
+- **Permission errors** - Run: `sudo chown -R www-data:www-data /opt/serveros`
+- **Forgot password** - Run: `sudo /opt/serveros/tools/reset-admin.php`
 
 ## Security Notes
 

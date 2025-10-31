@@ -20,9 +20,8 @@ CREATE TABLE IF NOT EXISTS users (
     INDEX idx_role (role)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Create default admin user (password: admin123)
-INSERT INTO users (username, email, password, full_name, role)
-VALUES ('admin', 'admin@localhost', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Administrator', 'admin');
+-- Default admin user will be created by installation script
+-- This ensures the password hash is generated correctly
 
 -- Sessions Table
 CREATE TABLE IF NOT EXISTS sessions (

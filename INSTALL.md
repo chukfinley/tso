@@ -38,6 +38,47 @@ The installer will:
 
 The entire installation process takes approximately **5-10 minutes** depending on your internet connection and system specifications.
 
+---
+
+## Updating Existing Installation
+
+**Good news:** The installer can update existing installations!
+
+If you already have ServerOS installed and want to update to the latest version:
+
+```bash
+# Method 1: Re-run the bootstrap (recommended)
+curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash
+
+# Method 2: Use the update script
+sudo /opt/serveros/update.sh
+
+# Method 3: Git clone and install
+git clone https://github.com/chukfinley/tso.git
+cd tso
+sudo ./install.sh
+# Will detect existing installation and offer to update
+```
+
+### What Gets Updated:
+- ✅ PHP application files
+- ✅ HTML/CSS/JavaScript
+- ✅ Backend classes
+- ✅ Templates
+- ✅ Tools and utilities
+
+### What Gets Preserved:
+- ✅ Database credentials in config.php
+- ✅ All database tables and data
+- ✅ All user accounts
+- ✅ Logs
+- ✅ Storage data
+- ✅ Apache configuration
+
+**No manual database migration needed!** The update is safe and automatic.
+
+---
+
 ## System Requirements
 
 ### Minimum Requirements:

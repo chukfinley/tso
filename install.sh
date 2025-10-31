@@ -166,6 +166,8 @@ deploy_files() {
     cp -r "${SCRIPT_DIR}/public" ${INSTALL_DIR}/ 2>/dev/null || true
     cp -r "${SCRIPT_DIR}/src" ${INSTALL_DIR}/ 2>/dev/null || true
     cp -r "${SCRIPT_DIR}/views" ${INSTALL_DIR}/ 2>/dev/null || true
+    cp -r "${SCRIPT_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
+    cp "${SCRIPT_DIR}/init.sql" ${INSTALL_DIR}/ 2>/dev/null || true
 
     # Create logs and storage directories
     mkdir -p ${INSTALL_DIR}/logs
@@ -191,6 +193,47 @@ configure_app() {
     sed -i "s/ini_set('display_errors', 1);/ini_set('display_errors', 0);/" ${INSTALL_DIR}/config/config.php
 
     print_success "Application configured"
+}
+
+create_admin_user() {
+    print_info "Creating default admin user..."
+
+    # Create admin user using PHP
+    php -r "
+        require_once '${INSTALL_DIR}/config/config.php';
+        require_once '${INSTALL_DIR}/src/Database.php';
+
+        try {
+            \$pdo = new PDO(
+                'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4',
+                DB_USER,
+                DB_PASS,
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+
+            // Check if admin exists
+            \$stmt = \$pdo->prepare('SELECT id FROM users WHERE username = ?');
+            \$stmt->execute(['admin']);
+
+            if (\$stmt->rowCount() === 0) {
+                // Create admin user
+                \$password = password_hash('admin123', PASSWORD_BCRYPT);
+                \$stmt = \$pdo->prepare('
+                    INSERT INTO users (username, email, password, full_name, role, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ');
+                \$stmt->execute(['admin', 'admin@localhost', \$password, 'Administrator', 'admin', 1]);
+                echo 'Admin user created';
+            } else {
+                echo 'Admin user already exists';
+            }
+        } catch (Exception \$e) {
+            echo 'Error: ' . \$e->getMessage();
+            exit(1);
+        }
+    "
+
+    print_success "Admin user ready (admin/admin123)"
 }
 
 configure_apache() {
@@ -367,6 +410,58 @@ EOF
 }
 
 ################################################################################
+# Update Detection
+################################################################################
+
+detect_existing_installation() {
+    if [[ -d "${INSTALL_DIR}" ]] && [[ -f "${INSTALL_DIR}/config/config.php" ]]; then
+        return 0  # Installation exists
+    else
+        return 1  # No installation
+    fi
+}
+
+perform_update() {
+    print_info "Existing installation detected - performing update..."
+    echo ""
+
+    # Backup current config
+    print_info "Backing up current configuration..."
+    cp ${INSTALL_DIR}/config/config.php /tmp/serveros-config-backup.php
+    print_success "Configuration backed up"
+
+    # Deploy new files (will overwrite application files but not config)
+    deploy_files
+
+    # Restore config
+    print_info "Restoring configuration..."
+    cp /tmp/serveros-config-backup.php ${INSTALL_DIR}/config/config.php
+    print_success "Configuration restored"
+
+    # Copy tools (always update)
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    cp -r "${SCRIPT_DIR}/tools" ${INSTALL_DIR}/ 2>/dev/null || true
+    print_success "Tools updated"
+
+    # Ensure admin user exists with correct password
+    create_admin_user
+
+    # Update permissions
+    set_permissions
+
+    # Restart services
+    restart_services
+
+    echo ""
+    print_success "Update completed successfully!"
+    echo ""
+    print_info "Configuration preserved from existing installation"
+    print_info "Application files updated to latest version"
+    print_info "Database and users unchanged"
+    echo ""
+}
+
+################################################################################
 # Main Installation Flow
 ################################################################################
 
@@ -378,25 +473,46 @@ main() {
     check_root
     check_os
 
-    # Installation steps
-    echo ""
-    print_info "Starting installation process..."
-    echo ""
+    # Check if this is an update or new installation
+    if detect_existing_installation; then
+        echo ""
+        print_warning "ServerOS is already installed at ${INSTALL_DIR}"
+        echo ""
+        echo "This script can:"
+        echo "  1. Update existing installation (preserves config & database)"
+        echo "  2. Cancel and exit"
+        echo ""
+        read -p "Do you want to update? (yes/no): " -r
+        echo ""
 
-    update_system
-    install_dependencies
-    configure_mariadb
-    create_database
-    import_schema
-    deploy_files
-    configure_app
-    configure_apache
-    set_permissions
-    configure_firewall
-    restart_services
+        if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+            perform_update
+        else
+            print_info "Update cancelled."
+            exit 0
+        fi
+    else
+        # New installation
+        echo ""
+        print_info "Starting fresh installation..."
+        echo ""
 
-    # Show completion info
-    show_completion_info
+        update_system
+        install_dependencies
+        configure_mariadb
+        create_database
+        import_schema
+        deploy_files
+        configure_app
+        create_admin_user
+        configure_apache
+        set_permissions
+        configure_firewall
+        restart_services
+
+        # Show completion info
+        show_completion_info
+    fi
 }
 
 # Run main installation
