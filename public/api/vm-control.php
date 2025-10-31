@@ -42,6 +42,43 @@ if (!empty($_POST) && isset($_POST['action'])) {
 $action = $input['action'] ?? $_GET['action'] ?? $_POST['action'] ?? '';
 $vmId = $input['vm_id'] ?? $_GET['vm_id'] ?? $_POST['vm_id'] ?? 0;
 
+// Helper functions for file size handling
+$parseSize = function($size) {
+    $size = trim($size);
+    if (empty($size)) return 0;
+    // Remove any trailing 'b' or 'B' (e.g., "2GB" -> "2G")
+    $size = rtrim($size, 'bB');
+    if (empty($size)) return 0;
+    
+    $last = strtolower($size[strlen($size)-1]);
+    $numericValue = intval($size);
+    
+    switch($last) {
+        case 'g':
+            $numericValue *= 1024; // GB to MB
+            // fall through
+        case 'm':
+            $numericValue *= 1024; // MB to KB (or from GB: MB to KB)
+            // fall through
+        case 'k':
+            $numericValue *= 1024; // KB to bytes (or from MB/KB: KB to bytes)
+            break;
+        default:
+            // If it's just a number without suffix, assume bytes
+            break;
+    }
+    return $numericValue;
+};
+
+$formatBytes = function($bytes, $precision = 2) {
+    $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    $bytes = max($bytes, 0);
+    $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+    $pow = min($pow, count($units) - 1);
+    $bytes /= pow(1024, $pow);
+    return round($bytes, $precision) . ' ' . $units[$pow];
+};
+
 try {
     switch ($action) {
         case 'upload_iso':
@@ -50,12 +87,12 @@ try {
                 // Check if POST data was received (might indicate file size exceeded limits)
                 if (empty($_POST) && empty($_FILES) && !empty($_SERVER['CONTENT_LENGTH'])) {
                     $contentLength = intval($_SERVER['CONTENT_LENGTH']);
-                    $postMaxSize = $this->parseSize(ini_get('post_max_size'));
-                    $uploadMaxSize = $this->parseSize(ini_get('upload_max_filesize'));
+                    $postMaxSize = $parseSize(ini_get('post_max_size'));
+                    $uploadMaxSize = $parseSize(ini_get('upload_max_filesize'));
                     $maxSize = max($postMaxSize, $uploadMaxSize);
                     
                     if ($contentLength > $maxSize) {
-                        throw new Exception('File size exceeds PHP limit. Maximum allowed: ' . $this->formatBytes($maxSize) . '. Check upload_max_filesize and post_max_size in php.ini');
+                        throw new Exception('File size exceeds PHP limit. Maximum allowed: ' . $formatBytes($maxSize) . '. Check upload_max_filesize and post_max_size in php.ini');
                     }
                 }
                 throw new Exception('No file uploaded. Please check file size limits (upload_max_filesize, post_max_size) and try again.');
@@ -159,28 +196,7 @@ try {
                 [$_SESSION['user_id'], 'iso_upload', "Uploaded ISO file: {$safeFileName} (" . number_format($fileSize / 1024 / 1024, 2) . " MB)", $_SERVER['REMOTE_ADDR']]
             );
 
-            // Format file size for display
-            $formatBytes = function($bytes, $precision = 2) {
-                $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-                $bytes = max($bytes, 0);
-                $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
-                $pow = min($pow, count($units) - 1);
-                $bytes /= pow(1024, $pow);
-                return round($bytes, $precision) . ' ' . $units[$pow];
-            };
-            
-            // Helper function to parse PHP size strings (e.g., "2M" -> 2097152)
-            $parseSize = function($size) {
-                $size = trim($size);
-                $last = strtolower($size[strlen($size)-1]);
-                $size = intval($size);
-                switch($last) {
-                    case 'g': $size *= 1024;
-                    case 'm': $size *= 1024;
-                    case 'k': $size *= 1024;
-                }
-                return $size;
-            };
+            // Format file size for display (using the helper function defined earlier)
 
             // Clear output buffer to ensure clean JSON
             ob_clean();

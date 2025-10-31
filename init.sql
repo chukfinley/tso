@@ -218,3 +218,20 @@ CREATE TABLE IF NOT EXISTS share_access_log (
     INDEX idx_username (username),
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- System Logs Table (Centralized logging for all errors and logs)
+CREATE TABLE IF NOT EXISTS system_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    level ENUM('error', 'warning', 'info', 'debug') NOT NULL DEFAULT 'info',
+    message TEXT NOT NULL,
+    context TEXT,
+    user_id INT,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_level (level),
+    INDEX idx_user_id (user_id),
+    INDEX idx_created (created_at),
+    INDEX idx_ip_address (ip_address)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

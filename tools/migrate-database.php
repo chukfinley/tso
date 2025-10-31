@@ -250,6 +250,33 @@ try {
         echo "✓ Already exists\n";
     }
 
+    // Check and create system_logs table
+    echo "Checking system_logs table... ";
+    $stmt = $pdo->query("SHOW TABLES LIKE 'system_logs'");
+    if ($stmt->rowCount() === 0) {
+        echo "Creating...\n";
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS system_logs (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                level ENUM('error', 'warning', 'info', 'debug') NOT NULL DEFAULT 'info',
+                message TEXT NOT NULL,
+                context TEXT,
+                user_id INT,
+                ip_address VARCHAR(45),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+                INDEX idx_level (level),
+                INDEX idx_user_id (user_id),
+                INDEX idx_created (created_at),
+                INDEX idx_ip_address (ip_address)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        echo "✓ Created system_logs table\n";
+    } else {
+        echo "✓ Already exists\n";
+    }
+
     // Create VM storage directories
     echo "\nCreating VM storage directories... ";
     $vmStorageDir = '/opt/serveros/storage/vms';

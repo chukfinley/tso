@@ -551,9 +551,27 @@ function uploadIso(mode = 'create') {
         // Read response text once
         const text = await response.text();
         
+        // Try to parse JSON even if response is not OK (to get error message)
+        let data = null;
+        try {
+            if (text && text.trim().length > 0) {
+                data = JSON.parse(text);
+            }
+        } catch (e) {
+            // If JSON parsing fails, continue with error handling below
+        }
+        
         // Check if response is OK
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status} - ${text.substring(0, 100)}`);
+            // If we have parsed error data, use it
+            if (data && data.error) {
+                throw new Error(data.error);
+            }
+            // Otherwise use the raw text or status code
+            const errorMsg = text && text.trim().length > 0 
+                ? text.substring(0, 200) 
+                : `HTTP error! status: ${response.status}`;
+            throw new Error(errorMsg);
         }
         
         // Check if empty
@@ -561,13 +579,12 @@ function uploadIso(mode = 'create') {
             throw new Error('Empty response from server');
         }
         
-        // Check content type
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            throw new Error('Invalid response format. Expected JSON but got: ' + text.substring(0, 100));
+        // If we already parsed, return it
+        if (data !== null) {
+            return data;
         }
         
-        // Parse JSON
+        // Try to parse JSON
         try {
             return JSON.parse(text);
         } catch (e) {
