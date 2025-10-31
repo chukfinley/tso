@@ -23,6 +23,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                 <span class="badge badge-admin" style="margin-left: 10px;">Admin</span>
             <?php endif; ?>
         </div>
+        <a href="/profile.php" class="btn btn-secondary" style="font-size: 12px; padding: 8px 15px; margin-right: 10px;">Profile</a>
         <a href="/logout.php" class="btn btn-secondary" style="font-size: 12px; padding: 8px 15px;">Logout</a>
     </div>
 </nav>
