@@ -62,6 +62,13 @@ class Auth {
     }
 
     /**
+     * Backwards-compatible alias for legacy code
+     */
+    public function check() {
+        return $this->isLoggedIn();
+    }
+
+    /**
      * Get current user
      */
     public function getCurrentUser() {
