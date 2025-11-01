@@ -51,8 +51,13 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Redirect to login
-      window.location.href = '/login';
+      if (typeof window !== 'undefined') {
+        const path = window.location.pathname;
+        if (path !== '/login') {
+          window.location.href = '/login';
+          return Promise.reject(error);
+        }
+      }
     }
     return Promise.reject(error);
   }
