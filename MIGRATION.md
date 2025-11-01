@@ -1,119 +1,232 @@
-# Database Migration Instructions
+# Migration from PHP to Go/TypeScript
 
-## How Migrations Work
+This document describes the migration from the PHP version to the new Go/TypeScript version of TSO.
 
-The migration system is split into two parts:
+## What Changed
 
-1. **Fresh Installations**: All base tables are created from `init.sql` during installation
-2. **Updates**: The `migrate-database.php` script only handles NEW tables/columns added after the current version
+### Architecture
+- **Backend**: PHP → Go (Gorilla Mux)
+- **Frontend**: PHP templates + jQuery → TypeScript/React with Vite
+- **API**: PHP files → RESTful Go handlers
+- **Build**: Apache/PHP-FPM → Go binary + static frontend
 
-All base tables (users, sessions, activity_log, virtual_machines, vm_backups, shares, share_users, share_permissions, share_access_log, system_logs) are defined in `init.sql` and created automatically during fresh installations.
+### What Stayed the Same
+- **Database**: Same MySQL/MariaDB schema (`init.sql`)
+- **Features**: All functionality preserved
+- **Database structure**: Fully compatible, no migration needed
 
-## Running Migrations
+## Old Code Location
 
-### Option 1: Run Migration Script Directly (RECOMMENDED - Takes seconds)
+All old PHP code has been moved to `archive-old-php/` directory:
 
-```bash
-sudo php /opt/serveros/tools/migrate-database.php
+```
+archive-old-php/
+├── public/         # Old PHP pages
+├── src/            # Old PHP classes
+├── views/          # Old PHP templates
+├── config/          # Old PHP configuration
+├── tools/           # Old PHP tools
+└── scripts/         # Old setup scripts
 ```
 
-This will:
-- ✓ Check for and create NEW tables/columns (added in latest version)
-- ✓ Create VM storage directories if missing
-- ✓ Set proper permissions
-- ✓ Preserve all existing data
+## Database Migration
 
-### Option 2: Re-run Install Script (Automatic Update)
+**No database migration needed!** The database schema is identical, so:
 
+1. Keep your existing database
+2. Point the new Go backend to the same database
+3. Everything will work with your existing data
+
+## Installation Process
+
+The new installation script (`install.sh`) will:
+
+1. Install Go, Node.js, MySQL dependencies
+2. Setup database (creates new or uses existing)
+3. Build Go backend
+4. Build TypeScript frontend
+5. Create systemd service
+6. Configure nginx (if available)
+
+## Configuration
+
+### Old (PHP)
+- Configuration in `config/config.php`
+- PHP constants for database
+
+### New (Go)
+- Configuration via environment variables
+- Stored in `go-backend/.env`:
+  ```
+  DB_HOST=localhost
+  DB_NAME=servermanager
+  DB_USER=tso
+  DB_PASS=your_password
+  SESSION_SECRET=secret
+  PORT=8080
+  ```
+
+## Running the Application
+
+### Old (PHP)
 ```bash
-cd /home/user/git/tso
-sudo ./install.sh
+# Run via Apache/PHP-FPM
+# Configured at /etc/apache2/sites-available/serveros.conf
 ```
 
-When prompted, choose "yes" to update. This will:
-- ✓ Update all application files
-- ✓ Run database migrations automatically
-- ✓ Preserve your config and database
-- ✓ Install/verify all QEMU/KVM packages
-
-### Option 3: Pull Latest Changes (Fastest if on server)
-
+### New (Go)
 ```bash
-cd /opt/serveros
-sudo git pull
-sudo php tools/migrate-database.php
-sudo systemctl restart apache2
+# Run via systemd service
+sudo systemctl start tso
+
+# Or manually
+cd go-backend
+export $(cat .env | xargs)
+./tso-server
 ```
 
-## Database Schema
+## File Locations
 
-### Base Tables (Created by init.sql on Fresh Install)
+### Old Installation
+- Files: `/opt/serveros/public/`
+- Config: `/opt/serveros/config/config.php`
+- Tools: `/opt/serveros/tools/`
 
-All base tables are defined in `init.sql` and created automatically during fresh installations:
-- `users` - User accounts
-- `sessions` - User sessions
-- `activity_log` - Activity logging
-- `virtual_machines` - VM configuration and state
-- `vm_backups` - VM backup management
-- `shares` - Network shares configuration
-- `share_users` - Samba users
-- `share_permissions` - Share access control
-- `share_access_log` - Share access logging
-- `system_logs` - System-wide logging
+### New Installation
+- Backend: `/opt/serveros/go-backend/`
+- Frontend: `/opt/serveros/frontend/dist/`
+- Config: `/opt/serveros/go-backend/.env`
+- Binary: `/opt/serveros/go-backend/tso-server`
 
-**Note**: The migration script (`migrate-database.php`) only handles NEW tables/columns that are added in future versions. Existing tables are not checked by the migration script since they're already in `init.sql`.
+## API Changes
 
-### Storage Directories Created
-- `/opt/serveros/storage/vms` - VM disk images
-- `/opt/serveros/storage/backups` - VM backups
-- `/opt/serveros/storage/isos` - ISO files for VMs
+### Old API
+- PHP files in `public/api/*.php`
+- Direct file access: `/api/system-stats.php`
+- Form-data and JSON mixed
 
-### QEMU/KVM Packages (Already in install.sh)
-- qemu-kvm
-- qemu-system-x86
-- qemu-utils
-- libvirt-daemon-system
-- libvirt-clients
-- bridge-utils
-- virt-manager
-- gzip
+### New API
+- RESTful endpoints: `/api/system/stats`
+- JSON only
+- Consistent response format
 
-## After Migration
+**Endpoint Mapping:**
 
-Once the migration completes:
+| Old | New |
+|-----|-----|
+| `/api/login.php` | `POST /api/login` |
+| `/api/system-stats.php` | `GET /api/system/stats` |
+| `/api/share-control.php?action=list` | `GET /api/shares` |
+| `/api/vm-control.php?action=list` | `GET /api/vms` |
 
-1. Visit http://YOUR_SERVER_IP/vms.php
-2. The page should load without 500 error
-3. You can now:
-   - Create new VMs with QEMU/KVM
-   - Configure CPU, RAM, disk, network
-   - Mount ISO images
-   - Start/Stop/Restart VMs
-   - View VM logs
-   - Download SPICE connection files
-   - Create and restore VM backups
+## Frontend Changes
 
-## Troubleshooting
+### Old Frontend
+- PHP templates with server-side rendering
+- jQuery for AJAX
+- Bootstrap for styling
+- Direct PHP includes
 
-If you still get errors after migration:
+### New Frontend
+- React SPA (Single Page Application)
+- TypeScript for type safety
+- Vite for fast development
+- Axios for HTTP requests
+- Client-side routing
 
-1. Check Apache error log:
+## Development Workflow
+
+### Old (PHP)
+```bash
+# Edit PHP files
+vim public/dashboard.php
+# Refresh browser
+```
+
+### New (Go/TypeScript)
+```bash
+# Terminal 1: Backend
+cd go-backend
+go run .
+
+# Terminal 2: Frontend
+cd frontend
+npm run dev
+
+# Edit files, auto-reload
+```
+
+## Breaking Changes
+
+1. **No direct PHP execution** - Everything goes through Go API
+2. **No PHP sessions** - Uses Go session middleware
+3. **No .php files** - All routes through Go router
+4. **Frontend is SPA** - No server-side rendering
+5. **API format changed** - All endpoints now RESTful JSON
+
+## Compatibility
+
+### What Works
+✅ Same database schema
+✅ All features preserved
+✅ Same user accounts
+✅ Same shares and VMs
+
+### What Doesn't Work
+❌ Old PHP API endpoints (moved to REST)
+❌ Direct .php file access
+❌ PHP-specific tools (need to be rewritten in Go)
+
+## Migration Steps
+
+1. **Backup your data:**
    ```bash
-   sudo tail -50 /var/log/apache2/error.log
+   mysqldump -u root -p servermanager > backup.sql
    ```
 
-2. Check if migration completed:
+2. **Run new installer:**
    ```bash
-   sudo mysql servermanager -e "SHOW TABLES LIKE 'virtual_machines'"
+   sudo ./install.sh
    ```
 
-3. Verify QEMU is installed:
+3. **Point installer to existing database:**
+   - The installer will detect existing database
+   - Choose to keep it or recreate
+
+4. **Test everything:**
+   - Login with existing credentials
+   - Verify shares, VMs, users
+
+5. **Remove old Apache config** (optional):
    ```bash
-   which qemu-system-x86_64
+   sudo a2dissite serveros
+   sudo systemctl reload apache2
    ```
 
-4. Check www-data permissions:
+## Rollback
+
+If you need to rollback:
+
+1. Stop new service:
    ```bash
-   groups www-data
-   # Should show: kvm libvirt
+   sudo systemctl stop tso
    ```
+
+2. Restore old files from archive:
+   ```bash
+   cp -r archive-old-php/* /opt/serveros/
+   ```
+
+3. Restart Apache:
+   ```bash
+   sudo systemctl restart apache2
+   ```
+
+## Support
+
+For issues or questions about the migration:
+
+1. Check `README.md` for general info
+2. Check `INSTALL.md` for installation issues
+3. Check `QUICKSTART-LOCAL.md` for local development
+4. Review `README-GO-TS.md` for architecture details

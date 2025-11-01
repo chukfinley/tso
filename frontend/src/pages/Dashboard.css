@@ -1,0 +1,139 @@
+.dashboard {
+  color: #fff;
+}
+
+.dashboard h1 {
+  margin-bottom: 2rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: #2a2a2a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-content h3 {
+  margin: 0;
+  font-size: 2rem;
+  color: #ff8c00;
+}
+
+.stat-content p {
+  margin: 0.5rem 0 0 0;
+  color: #b0b0b0;
+}
+
+.stat-icon {
+  font-size: 3rem;
+}
+
+.monitoring-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.card {
+  background: #2a2a2a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.card-header {
+  background: #333;
+  padding: 1rem;
+  font-weight: 600;
+  border-bottom: 1px solid #444;
+}
+
+.card-body {
+  padding: 1rem;
+}
+
+.monitor-stat {
+  margin-bottom: 1rem;
+}
+
+.stat-label {
+  color: #b0b0b0;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.stat-value {
+  color: #fff;
+  font-size: 1rem;
+}
+
+.progress-container {
+  position: relative;
+  background: #1a1a1a;
+  border-radius: 4px;
+  height: 24px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: #4caf50;
+  transition: width 0.3s ease;
+}
+
+.progress-bar.warning {
+  background: #ff9800;
+}
+
+.progress-bar.danger {
+  background: #f44336;
+}
+
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.network-interface {
+  padding: 1rem;
+  background: #1a1a1a;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.interface-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.status-up {
+  color: #4caf50;
+}
+
+.status-down {
+  color: #f44336;
+}
+
+.interface-details {
+  font-size: 0.9rem;
+  color: #b0b0b0;
+}
+

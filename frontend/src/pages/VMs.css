@@ -1,0 +1,91 @@
+.vms {
+  color: #fff;
+}
+
+.vms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.vm-card {
+  background: #2a2a2a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.vm-header {
+  background: #333;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vm-header h3 {
+  margin: 0;
+  color: #ff8c00;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-running {
+  background: #4caf50;
+  color: white;
+}
+
+.status-stopped {
+  background: #666;
+  color: white;
+}
+
+.vm-body {
+  padding: 1rem;
+}
+
+.vm-info {
+  margin-bottom: 1rem;
+  color: #b0b0b0;
+}
+
+.vm-info div {
+  margin-bottom: 0.5rem;
+}
+
+.vm-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-start {
+  background: #4caf50;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-start:hover {
+  background: #45a049;
+}
+
+.btn-stop {
+  background: #f44336;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-stop:hover {
+  background: #d32f2f;
+}
+

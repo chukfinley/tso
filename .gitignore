@@ -1,17 +1,14 @@
-# Dependencies
-vendor/
-node_modules/
+# Backend
+go-backend/.env
+go-backend/tso-server
+go-backend/*.log
 
-# Environment
-.env
-.env.local
-
-# Configuration (production)
-config/config.php
-
-# Logs and storage
-logs/
-storage/
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env
+frontend/.env.local
 
 # IDE
 .idea/
@@ -24,11 +21,18 @@ storage/
 .DS_Store
 Thumbs.db
 
-# Temporary files
+# Logs
+logs/*.log
+*.log
+
+# Temporary
 *.tmp
 *.temp
-*.cache
+/tmp/
 
-# Backups
-*.bak
-*-backup.php
+# Build artifacts
+*.o
+*.exe
+*.dll
+*.so
+*.dylib

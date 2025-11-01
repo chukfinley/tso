@@ -1,0 +1,38 @@
+.users {
+  color: #fff;
+}
+
+.users table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.users th,
+.users td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #333;
+}
+
+.users th {
+  background: #333;
+  font-weight: 600;
+}
+
+.users button {
+  background: #ff8c00;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 0.5rem;
+}
+
+.users button:hover {
+  background: #e67e00;
+}
+
