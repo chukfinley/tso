@@ -56,20 +56,20 @@ Das Skript installiert automatisch:
 
 ### Ein-Zeilen-Installation (von GitHub)
 
-Lädt das gesamte Repository herunter und installiert automatisch:
+Lädt das gesamte Repository herunter und installiert automatisch **mit vollständigem Output**:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/chukfinley/tso/master/bootstrap.sh | sudo bash
 ```
 
 **Was passiert:**
-1. ✅ Lädt TSO von GitHub herunter
-2. ✅ Installiert alle Abhängigkeiten (Go, Node.js, MariaDB)
-3. ✅ Erstellt Datenbank
-4. ✅ Baut Backend und Frontend
-5. ✅ Startet den Service
+1. ✅ Lädt TSO von GitHub herunter (zeigt Fortschritt)
+2. ✅ Installiert alle Abhängigkeiten (Go, Node.js, MariaDB) - **zeigt alle Outputs**
+3. ✅ Erstellt Datenbank - **zeigt alle SQL-Operationen**
+4. ✅ Baut Backend und Frontend - **zeigt Build-Logs**
+5. ✅ Startet den Service - **zeigt Service-Status**
 
-Das ist alles! Nach 5-10 Minuten ist alles fertig installiert.
+**Hinweis:** Das bootstrap.sh Skript verwendet automatisch den Verbose-Modus, damit Sie alle Details sehen können!
 
 ## Zugriff
 

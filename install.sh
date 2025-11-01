@@ -62,12 +62,26 @@ fi
 
 # Install dependencies
 echo -e "${YELLOW}📦 Installiere Abhängigkeiten...${NC}"
+echo -e "${YELLOW}  → Aktualisiere Paket-Listen...${NC}"
 if [ "$VERBOSE" = true ]; then
-    apt-get update
-    apt-get install -y curl wget git build-essential
+    if ! apt-get update; then
+        echo -e "${RED}❌ Fehler beim Aktualisieren der Paket-Listen!${NC}"
+        exit 1
+    fi
+    echo -e "${YELLOW}  → Installiere curl, wget, git, build-essential...${NC}"
+    if ! apt-get install -y curl wget git build-essential; then
+        echo -e "${RED}❌ Fehler beim Installieren der Basis-Pakete!${NC}"
+        exit 1
+    fi
 else
-    apt-get update > /dev/null 2>&1
-    apt-get install -y curl wget git build-essential > /dev/null 2>&1
+    if ! apt-get update > /dev/null 2>&1; then
+        echo -e "${RED}❌ Fehler beim Aktualisieren der Paket-Listen!${NC}"
+        exit 1
+    fi
+    if ! apt-get install -y curl wget git build-essential > /dev/null 2>&1; then
+        echo -e "${RED}❌ Fehler beim Installieren der Basis-Pakete!${NC}"
+        exit 1
+    fi
 fi
 
 # Install Go if not present
@@ -75,20 +89,34 @@ if ! command -v go &> /dev/null; then
     echo -e "${YELLOW}  → Installiere Go...${NC}"
     GO_VERSION="1.21.5"
     if [ "$VERBOSE" = true ]; then
-        wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
-        tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
+        echo -e "${YELLOW}    Lade Go ${GO_VERSION} herunter...${NC}"
+        if ! wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz; then
+            echo -e "${RED}❌ Fehler beim Herunterladen von Go!${NC}"
+            exit 1
+        fi
+        echo -e "${YELLOW}    Entpacke Go...${NC}"
+        if ! tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz; then
+            echo -e "${RED}❌ Fehler beim Entpacken von Go!${NC}"
+            exit 1
+        fi
     else
-        wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
-        tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz
+        if ! wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz; then
+            echo -e "${RED}❌ Fehler beim Herunterladen von Go!${NC}"
+            exit 1
+        fi
+        if ! tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz; then
+            echo -e "${RED}❌ Fehler beim Entpacken von Go!${NC}"
+            exit 1
+        fi
     fi
-    rm go${GO_VERSION}.linux-amd64.tar.gz
+    rm -f go${GO_VERSION}.linux-amd64.tar.gz
     export PATH=$PATH:/usr/local/go/bin
     echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
     if [ "$VERBOSE" = true ]; then
         echo -e "${GREEN}  ✓ Go installiert${NC}"
     fi
 else
-    GO_VERSION=$(go version)
+    GO_VERSION=$(go version 2>&1 || echo "unknown")
     if [ "$VERBOSE" = true ]; then
         echo -e "${GREEN}  ✓ Go bereits installiert: $GO_VERSION${NC}"
     fi
@@ -98,18 +126,32 @@ fi
 if ! command -v node &> /dev/null; then
     echo -e "${YELLOW}  → Installiere Node.js...${NC}"
     if [ "$VERBOSE" = true ]; then
-        curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-        apt-get install -y nodejs
+        echo -e "${YELLOW}    Füge NodeSource Repository hinzu...${NC}"
+        if ! curl -fsSL https://deb.nodesource.com/setup_18.x | bash -; then
+            echo -e "${RED}❌ Fehler beim Hinzufügen des NodeSource Repositories!${NC}"
+            exit 1
+        fi
+        echo -e "${YELLOW}    Installiere Node.js...${NC}"
+        if ! apt-get install -y nodejs; then
+            echo -e "${RED}❌ Fehler beim Installieren von Node.js!${NC}"
+            exit 1
+        fi
     else
-        curl -fsSL https://deb.nodesource.com/setup_18.x | bash - > /dev/null 2>&1
-        apt-get install -y nodejs > /dev/null 2>&1
+        if ! curl -fsSL https://deb.nodesource.com/setup_18.x | bash - > /dev/null 2>&1; then
+            echo -e "${RED}❌ Fehler beim Hinzufügen des NodeSource Repositories!${NC}"
+            exit 1
+        fi
+        if ! apt-get install -y nodejs > /dev/null 2>&1; then
+            echo -e "${RED}❌ Fehler beim Installieren von Node.js!${NC}"
+            exit 1
+        fi
     fi
     if [ "$VERBOSE" = true ]; then
-        NODE_VERSION=$(node --version)
+        NODE_VERSION=$(node --version 2>&1 || echo "unknown")
         echo -e "${GREEN}  ✓ Node.js installiert: $NODE_VERSION${NC}"
     fi
 else
-    NODE_VERSION=$(node --version)
+    NODE_VERSION=$(node --version 2>&1 || echo "unknown")
     if [ "$VERBOSE" = true ]; then
         echo -e "${GREEN}  ✓ Node.js bereits installiert: $NODE_VERSION${NC}"
     fi
@@ -119,13 +161,22 @@ fi
 if ! command -v mysql &> /dev/null; then
     echo -e "${YELLOW}  → Installiere MariaDB...${NC}"
     if [ "$VERBOSE" = true ]; then
-        apt-get install -y mariadb-server
-        systemctl start mariadb
-        systemctl enable mariadb
+        if ! apt-get install -y mariadb-server; then
+            echo -e "${RED}❌ Fehler beim Installieren von MariaDB!${NC}"
+            exit 1
+        fi
+        echo -e "${YELLOW}    Starte MariaDB Service...${NC}"
+        if ! systemctl start mariadb; then
+            echo -e "${YELLOW}⚠️  MariaDB konnte nicht gestartet werden, versuche es manuell${NC}"
+        fi
+        systemctl enable mariadb || true
     else
-        apt-get install -y mariadb-server > /dev/null 2>&1
-        systemctl start mariadb
-        systemctl enable mariadb > /dev/null 2>&1
+        if ! apt-get install -y mariadb-server > /dev/null 2>&1; then
+            echo -e "${RED}❌ Fehler beim Installieren von MariaDB!${NC}"
+            exit 1
+        fi
+        systemctl start mariadb || true
+        systemctl enable mariadb > /dev/null 2>&1 || true
     fi
     if [ "$VERBOSE" = true ]; then
         echo -e "${GREEN}  ✓ MariaDB installiert${NC}"
@@ -144,25 +195,65 @@ if [ "$VERBOSE" = true ]; then
     echo -e "${YELLOW}  → Erstelle Datenbank und Benutzer...${NC}"
 fi
 
-mysql -u root <<EOF
+# Try to connect to MariaDB (might need password or might not)
+DB_SETUP_OUTPUT=$(mysql -u root <<EOF 2>&1
 CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 DROP USER IF EXISTS '$DB_USER'@'localhost';
 CREATE USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';
 GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';
 FLUSH PRIVILEGES;
 EOF
+)
+DB_SETUP_STATUS=$?
+
+if [ "$VERBOSE" = true ]; then
+    echo "$DB_SETUP_OUTPUT"
+fi
+
+if [ $DB_SETUP_STATUS -ne 0 ]; then
+    echo -e "${RED}❌ Fehler beim Einrichten der Datenbank!${NC}"
+    if [ "$VERBOSE" = true ]; then
+        echo -e "${RED}Fehler-Details:${NC}"
+        echo "$DB_SETUP_OUTPUT"
+    fi
+    echo -e "${YELLOW}   Prüfe ob MariaDB läuft: systemctl status mariadb${NC}"
+    echo -e "${YELLOW}   Möglicherweise benötigt MariaDB ein Root-Passwort${NC}"
+    echo -e "${YELLOW}   Versuche: sudo mysql_secure_installation${NC}"
+    exit 1
+fi
 
 # Import schema
 if [ -f "init.sql" ]; then
     if [ "$VERBOSE" = true ]; then
         echo -e "${YELLOW}  → Importiere Datenbank-Schema...${NC}"
-        mysql -u $DB_USER -p$DB_PASS $DB_NAME < init.sql
-    else
-        mysql -u $DB_USER -p$DB_PASS $DB_NAME < init.sql 2>/dev/null || true
     fi
+    
+    SCHEMA_OUTPUT=$(mysql -u $DB_USER -p$DB_PASS $DB_NAME < init.sql 2>&1)
+    SCHEMA_STATUS=$?
+    
+    if [ "$VERBOSE" = true ]; then
+        if [ -n "$SCHEMA_OUTPUT" ]; then
+            echo "$SCHEMA_OUTPUT"
+        fi
+    fi
+    
+    if [ $SCHEMA_STATUS -ne 0 ]; then
+        echo -e "${RED}❌ Fehler beim Importieren des Datenbank-Schemas!${NC}"
+        if [ "$VERBOSE" = true ]; then
+            echo -e "${RED}Fehler-Details:${NC}"
+            echo "$SCHEMA_OUTPUT"
+        fi
+        exit 1
+    fi
+    
     echo -e "${GREEN}✓ Datenbank-Schema importiert${NC}"
 else
     echo -e "${RED}❌ init.sql nicht gefunden!${NC}"
+    if [ "$VERBOSE" = true ]; then
+        echo -e "${YELLOW}   Aktuelles Verzeichnis: $(pwd)${NC}"
+        echo -e "${YELLOW}   Verfügbare Dateien:${NC}"
+        ls -la *.sql 2>/dev/null || echo "   Keine .sql Dateien gefunden"
+    fi
     exit 1
 fi
 
