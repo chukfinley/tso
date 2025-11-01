@@ -133,19 +133,30 @@ func main() {
 	
 	// Serve frontend static files if available
 	if frontendDir != "" {
+		// Use FileServer for better static file serving with proper MIME types
+		frontendFS := http.FileServer(http.Dir(frontendDir))
+		
 		// Handler function that serves static files or index.html for SPA routing
 		frontendHandler := func(w http.ResponseWriter, req *http.Request) {
-			// Skip API routes
+			// Skip API routes - let API router handle them
 			if strings.HasPrefix(req.URL.Path, "/api") {
 				http.NotFound(w, req)
 				return
 			}
 			
-			// Check if requested file exists
+			// Try to serve the requested file first
 			requestedPath := frontendDir + req.URL.Path
+			
+			// Serve index.html for root path
+			if req.URL.Path == "/" {
+				http.ServeFile(w, req, frontendDir+"/index.html")
+				return
+			}
+			
+			// Check if file exists
 			if info, err := os.Stat(requestedPath); err == nil && !info.IsDir() {
-				// File exists, serve it
-				http.ServeFile(w, req, requestedPath)
+				// File exists - serve it using FileServer for proper MIME types
+				frontendFS.ServeHTTP(w, req)
 				return
 			}
 			
