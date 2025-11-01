@@ -152,45 +152,56 @@ func main() {
 			continue
 		}
 		
-		// Check if directory exists and has index.html
-		if info, err := os.Stat(absPath); err == nil && info.IsDir() {
-			indexPath := absPath + "/index.html"
-			if _, err := os.Stat(indexPath); err == nil {
-				frontendDir = absPath
-				log.Printf("Frontend found at: %s", frontendDir)
-				break
-			}
+		// Check if directory exists
+		dirInfo, err := os.Stat(absPath)
+		if err != nil {
+			continue
+		}
+		
+		if !dirInfo.IsDir() {
+			continue
+		}
+		
+		// Check if index.html exists
+		indexPath := filepath.Join(absPath, "index.html")
+		if _, err := os.Stat(indexPath); err == nil {
+			frontendDir = absPath
+			log.Printf("✓ Frontend found at: %s", frontendDir)
+			break
 		}
 	}
 	
 	if frontendDir == "" {
-		log.Printf("WARNING: Frontend not found. Searched in: %v", frontendDirs)
-		log.Printf("Install dir: %s, Working dir: %s", installDir, workingDir)
+		log.Printf("⚠ WARNING: Frontend not found!")
+		log.Printf("  Install dir: %s", installDir)
+		log.Printf("  Working dir: %s", workingDir)
+		log.Printf("  Searched in: %v", frontendDirs)
 	}
 	
 	// Serve frontend static files if available
 	if frontendDir != "" {
-		// Use FileServer for better static file serving with proper MIME types
+		log.Printf("✓ Serving frontend from: %s", frontendDir)
+		
+		// Create file server for frontend directory
 		frontendFS := http.FileServer(http.Dir(frontendDir))
 		
 		// Handler function that serves static files or index.html for SPA routing
 		frontendHandler := func(w http.ResponseWriter, req *http.Request) {
-			// Skip API routes - let API router handle them
+			// Skip API routes - let API router handle them (shouldn't happen due to route order, but safety check)
 			if strings.HasPrefix(req.URL.Path, "/api") {
-				http.NotFound(w, req)
-				return
+				return // Let API routes handle it
 			}
-			
-			// Try to serve the requested file first
-			requestedPath := frontendDir + req.URL.Path
 			
 			// Serve index.html for root path
-			if req.URL.Path == "/" {
-				http.ServeFile(w, req, frontendDir+"/index.html")
+			if req.URL.Path == "/" || req.URL.Path == "" {
+				http.ServeFile(w, req, filepath.Join(frontendDir, "index.html"))
 				return
 			}
 			
-			// Check if file exists
+			// Try to serve the requested file
+			requestedPath := filepath.Join(frontendDir, req.URL.Path)
+			
+			// Check if file exists and is not a directory
 			if info, err := os.Stat(requestedPath); err == nil && !info.IsDir() {
 				// File exists - serve it using FileServer for proper MIME types
 				frontendFS.ServeHTTP(w, req)
@@ -198,11 +209,12 @@ func main() {
 			}
 			
 			// File doesn't exist - serve index.html for SPA routing
-			http.ServeFile(w, req, frontendDir+"/index.html")
+			http.ServeFile(w, req, filepath.Join(frontendDir, "index.html"))
 		}
 		
 		// Register handler for all non-API routes
-		// This must come after API routes but will match everything else
+		// API routes are registered first, so they take precedence
+		// This catch-all handler serves the frontend for all other routes
 		r.PathPrefix("/").HandlerFunc(frontendHandler)
 	} else {
 		// If frontend not built, serve API info
@@ -225,10 +237,7 @@ func main() {
 	// Get server info for startup message
 	serverIP := getServerIP()
 	hostname := getHostname()
-	installDir := os.Getenv("INSTALL_DIR")
-	if installDir == "" {
-		installDir = "/opt/serveros"
-	}
+	// installDir was already defined above, just use it
 	dbName := os.Getenv("DB_NAME")
 	if dbName == "" {
 		dbName = "servermanager"
