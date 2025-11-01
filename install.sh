@@ -525,40 +525,23 @@ else
 fi
 
 # Done!
-echo ""
-echo -e "${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║                  Installation abgeschlossen!                  ║${NC}"
-echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
-echo ""
-echo -e "${BLUE}Installationsverzeichnis:${NC} $INSTALL_DIR"
-echo -e "${BLUE}Datenbank:${NC} $DB_NAME"
-echo -e "${BLUE}Datenbank-Benutzer:${NC} $DB_USER"
-echo -e "${BLUE}Backend-Port:${NC} $BACKEND_PORT"
-echo ""
-if [ "$VERBOSE" = true ]; then
-    echo -e "${YELLOW}Verbose-Modus: Alle Details wurden angezeigt${NC}"
-    echo ""
+# Get public IP (first non-localhost IP)
+PUBLIC_IP=$(hostname -I | awk '{print $1}' 2>/dev/null)
+if [ -z "$PUBLIC_IP" ] || [ "$PUBLIC_IP" = "127.0.0.1" ]; then
+    # Fallback: try ip command to get first non-loopback IPv4 address
+    PUBLIC_IP=$(ip -4 addr show | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1 | grep -v '^127\.' | head -n1)
 fi
-if command -v nginx &> /dev/null; then
-    echo -e "${GREEN}🌐 Web-Interface:${NC} http://$(hostname -I | awk '{print $1}')"
-    echo -e "${GREEN}   Oder:${NC} http://localhost"
+if [ -z "$PUBLIC_IP" ]; then
+    PUBLIC_IP="localhost"
+fi
+
+# Determine port based on nginx availability
+if command -v nginx &> /dev/null && systemctl is-active --quiet nginx 2>/dev/null; then
+    PORT=""
 else
-    echo -e "${GREEN}🌐 Backend API:${NC} http://localhost:$BACKEND_PORT/api"
-    echo -e "${YELLOW}⚠️  Frontend muss separat bereitgestellt werden${NC}"
+    PORT=":$BACKEND_PORT"
 fi
+
+# Show only the URL at the end
 echo ""
-echo -e "${YELLOW}⚠️  Standard-Anmeldedaten:${NC}"
-echo -e "   ${BLUE}Benutzername:${NC} admin"
-echo -e "   ${BLUE}Passwort:${NC} admin123"
-echo -e "${RED}   ⚠️  BITTE SOFORT ÄNDERN!${NC}"
-echo ""
-echo -e "${BLUE}Service-Befehle:${NC}"
-echo "   sudo systemctl start tso    # Starten"
-echo "   sudo systemctl stop tso     # Stoppen"
-echo "   sudo systemctl restart tso  # Neustart"
-echo "   sudo systemctl status tso   # Status prüfen"
-if [ "$VERBOSE" = true ]; then
-    echo "   sudo journalctl -u tso -f  # Logs live anzeigen"
-fi
-echo ""
-echo -e "${GREEN}✅ Fertig! Viel Erfolg! 🚀${NC}"
+echo "http://${PUBLIC_IP}${PORT}"

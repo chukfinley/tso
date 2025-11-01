@@ -98,7 +98,7 @@ func main() {
 	// System routes
 	api.HandleFunc("/system/stats", RequireAuth(GetSystemStatsHandler)).Methods("GET")
 	api.HandleFunc("/system/info", GetServerInfoHandler).Methods("GET")
-	api.HandleFunc("/system/update", RequireAuth(RequireAdmin(SystemUpdateHandler)))).Methods("POST")
+	api.HandleFunc("/system/update", RequireAuth(RequireAdmin(SystemUpdateHandler))).Methods("POST")
 	api.HandleFunc("/system/control", RequireAuth(RequireAdmin(SystemControlHandler))).Methods("POST")
 
 	// Terminal routes
