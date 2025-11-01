@@ -86,40 +86,41 @@ fi
 
 # Install Go if not present
 if ! command -v go &> /dev/null; then
-    echo -e "${YELLOW}  → Installiere Go...${NC}"
-    GO_VERSION="1.21.5"
+    echo -e "${YELLOW}  → Installiere Go (neueste Version)...${NC}"
     if [ "$VERBOSE" = true ]; then
-        echo -e "${YELLOW}    Lade Go ${GO_VERSION} herunter...${NC}"
-        if ! wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz; then
-            echo -e "${RED}❌ Fehler beim Herunterladen von Go!${NC}"
-            exit 1
-        fi
-        echo -e "${YELLOW}    Entpacke Go...${NC}"
-        if ! tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz; then
-            echo -e "${RED}❌ Fehler beim Entpacken von Go!${NC}"
+        if ! bash <(curl -sL https://git.io/go-installer); then
+            echo -e "${RED}❌ Fehler beim Installieren von Go!${NC}"
             exit 1
         fi
     else
-        if ! wget -q https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz; then
-            echo -e "${RED}❌ Fehler beim Herunterladen von Go!${NC}"
-            exit 1
-        fi
-        if ! tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz; then
-            echo -e "${RED}❌ Fehler beim Entpacken von Go!${NC}"
+        if ! bash <(curl -sL https://git.io/go-installer) > /dev/null 2>&1; then
+            echo -e "${RED}❌ Fehler beim Installieren von Go!${NC}"
             exit 1
         fi
     fi
-    rm -f go${GO_VERSION}.linux-amd64.tar.gz
-    export PATH=$PATH:/usr/local/go/bin
-    echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
+    export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+    echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> /etc/profile
+    # Verify Go installation by checking for actual binary
+    if [ -f "/usr/local/go/bin/go" ]; then
+        GO_VERIFY_BIN="/usr/local/go/bin/go"
+    elif [ -f "$HOME/go/bin/go" ]; then
+        GO_VERIFY_BIN="$HOME/go/bin/go"
+    else
+        echo -e "${RED}❌ Go Installation fehlgeschlagen! Binärdatei nicht gefunden.${NC}"
+        exit 1
+    fi
     if [ "$VERBOSE" = true ]; then
-        echo -e "${GREEN}  ✓ Go installiert${NC}"
+        GO_VERSION=$("$GO_VERIFY_BIN" version 2>&1 || echo "unknown")
+        echo -e "${GREEN}  ✓ Go installiert: $GO_VERSION${NC}"
     fi
 else
     GO_VERSION=$(go version 2>&1 || echo "unknown")
     if [ "$VERBOSE" = true ]; then
         echo -e "${GREEN}  ✓ Go bereits installiert: $GO_VERSION${NC}"
     fi
+    # Ensure PATH is set
+    export PATH=$PATH:/usr/local/go/bin
+    export PATH=$PATH:$HOME/go/bin
 fi
 
 # Install Node.js if not present
@@ -309,37 +310,102 @@ EOF
 # Build backend
 echo -e "${YELLOW}🔨 Baue Backend...${NC}"
 cd "$INSTALL_DIR/go-backend"
-export PATH=$PATH:/usr/local/go/bin
+export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+
+# Find Go binary (avoid aliases by checking file directly)
+GO_BIN=""
+if [ -f "/usr/local/go/bin/go" ]; then
+    GO_BIN="/usr/local/go/bin/go"
+elif [ -f "$HOME/go/bin/go" ]; then
+    GO_BIN="$HOME/go/bin/go"
+elif command -v go &> /dev/null; then
+    # Last resort: use command -v but verify it's actually a file
+    GO_BIN=$(command -v go)
+    if [ ! -f "$GO_BIN" ]; then
+        GO_BIN=""
+    fi
+fi
+
+if [ -z "$GO_BIN" ] || [ ! -f "$GO_BIN" ]; then
+    echo -e "${RED}❌ Go nicht gefunden! Bitte manuell installieren.${NC}"
+    exit 1
+fi
+
+# Unalias go if it's aliased (won't affect our $GO_BIN)
+unalias go 2>/dev/null || true
+
+# Verify Go is available
+if ! "$GO_BIN" version &> /dev/null; then
+    echo -e "${RED}❌ Go ist nicht funktionsfähig!${NC}"
+    exit 1
+fi
 
 if [ "$VERBOSE" = true ]; then
+    echo -e "${YELLOW}  → Prüfe Go Version...${NC}"
+    "$GO_BIN" version
+    
     echo -e "${YELLOW}  → Initialisiere und synchronisiere Go Module...${NC}"
-    if ! go mod tidy; then
+    GO_TIDY_OUTPUT=$("$GO_BIN" mod tidy 2>&1)
+    GO_TIDY_STATUS=$?
+    if [ $GO_TIDY_STATUS -ne 0 ]; then
         echo -e "${RED}❌ Fehler bei go mod tidy!${NC}"
+        echo "$GO_TIDY_OUTPUT"
         exit 1
     fi
+    
     echo -e "${YELLOW}  → Installiere Go Dependencies...${NC}"
-    if ! go mod download; then
+    GO_DOWNLOAD_OUTPUT=$("$GO_BIN" mod download 2>&1)
+    GO_DOWNLOAD_STATUS=$?
+    if [ $GO_DOWNLOAD_STATUS -ne 0 ]; then
         echo -e "${RED}❌ Fehler beim Herunterladen der Dependencies!${NC}"
+        echo "$GO_DOWNLOAD_OUTPUT"
         exit 1
     fi
+    
+    echo -e "${YELLOW}  → Verifiziere go.sum Datei...${NC}"
+    if [ ! -f "go.sum" ]; then
+        echo -e "${YELLOW}    Warnung: go.sum nicht gefunden, führe go mod tidy erneut aus...${NC}"
+        "$GO_BIN" mod tidy
+    fi
+    
     echo -e "${YELLOW}  → Kompiliere Backend...${NC}"
-    if ! go build -o tso-server .; then
+    GO_BUILD_OUTPUT=$("$GO_BIN" build -o tso-server . 2>&1)
+    GO_BUILD_STATUS=$?
+    if [ $GO_BUILD_STATUS -ne 0 ]; then
         echo -e "${RED}❌ Fehler beim Kompilieren des Backends!${NC}"
+        echo "$GO_BUILD_OUTPUT"
         exit 1
     fi
 else
-    if ! go mod tidy > /dev/null 2>&1; then
+    GO_TIDY_OUTPUT=$("$GO_BIN" mod tidy 2>&1)
+    GO_TIDY_STATUS=$?
+    if [ $GO_TIDY_STATUS -ne 0 ]; then
         echo -e "${RED}❌ Fehler bei go mod tidy!${NC}"
+        echo "$GO_TIDY_OUTPUT"
         echo -e "${YELLOW}   Führen Sie install.sh mit --verbose aus für Details${NC}"
         exit 1
     fi
-    if ! go mod download > /dev/null 2>&1; then
+    
+    GO_DOWNLOAD_OUTPUT=$("$GO_BIN" mod download 2>&1)
+    GO_DOWNLOAD_STATUS=$?
+    if [ $GO_DOWNLOAD_STATUS -ne 0 ]; then
         echo -e "${RED}❌ Fehler beim Herunterladen der Dependencies!${NC}"
+        echo "$GO_DOWNLOAD_OUTPUT"
         echo -e "${YELLOW}   Führen Sie install.sh mit --verbose aus für Details${NC}"
         exit 1
     fi
-    if ! go build -o tso-server . > /dev/null 2>&1; then
+    
+    # Verify go.sum exists after tidy
+    if [ ! -f "go.sum" ]; then
+        echo -e "${YELLOW}  → go.sum fehlt, führe go mod tidy erneut aus...${NC}"
+        "$GO_BIN" mod tidy
+    fi
+    
+    GO_BUILD_OUTPUT=$("$GO_BIN" build -o tso-server . 2>&1)
+    GO_BUILD_STATUS=$?
+    if [ $GO_BUILD_STATUS -ne 0 ]; then
         echo -e "${RED}❌ Fehler beim Kompilieren des Backends!${NC}"
+        echo "$GO_BUILD_OUTPUT"
         echo -e "${YELLOW}   Führen Sie install.sh mit --verbose aus für Details${NC}"
         exit 1
     fi

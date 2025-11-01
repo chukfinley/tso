@@ -627,7 +627,7 @@ func GetSambaStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 func GetConnectedClientsHandler(w http.ResponseWriter, r *http.Request) {
 	cmd := exec.Command("sudo", "smbstatus", "-b")
-	output, _ := cmd.Output()
+	_, _ = cmd.Output()
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
