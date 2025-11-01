@@ -1,7 +1,8 @@
 package main
 
 import (
-    "errors"
+	"bufio"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,7 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-    "syscall"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -18,6 +19,9 @@ import (
 )
 
 func main() {
+	workingDir, _ := os.Getwd()
+	loadEnvConfig(workingDir)
+
 	// Initialize session store
 	store = sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))
 	if len(os.Getenv("SESSION_SECRET")) == 0 {
@@ -119,7 +123,9 @@ func main() {
 	}
 
 	// Get current working directory (where backend is running from)
-	workingDir, _ := os.Getwd()
+	if wd, err := os.Getwd(); err == nil && wd != "" {
+		workingDir = wd
+	}
 	if workingDir == "" {
 		workingDir = installDir + "/go-backend"
 	}
@@ -314,6 +320,84 @@ func main() {
 	fmt.Println("")
 	log.Printf("API server starting on port %s", apiPort)
 	log.Fatal(http.ListenAndServe(":"+apiPort, apiHandler))
+}
+
+func loadEnvConfig(initialWorkingDir string) {
+	seen := map[string]struct{}{}
+	addCandidate := func(path string) {
+		if path == "" {
+			return
+		}
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			absPath = path
+		}
+		if _, exists := seen[absPath]; exists {
+			return
+		}
+		seen[absPath] = struct{}{}
+
+		if err := loadEnvFile(absPath); err == nil {
+			log.Printf("Loaded environment configuration from %s", absPath)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			log.Printf("⚠ Unable to load environment file %s: %v", absPath, err)
+		}
+	}
+
+	if initialWorkingDir != "" {
+		addCandidate(filepath.Join(initialWorkingDir, ".env"))
+	}
+
+	if installDir := os.Getenv("INSTALL_DIR"); installDir != "" {
+		addCandidate(filepath.Join(installDir, "go-backend", ".env"))
+	}
+
+	addCandidate("/opt/serveros/go-backend/.env")
+}
+
+func loadEnvFile(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "export ") {
+			line = strings.TrimSpace(strings.TrimPrefix(line, "export"))
+		}
+
+		sep := strings.Index(line, "=")
+		if sep == -1 {
+			continue
+		}
+
+		key := strings.TrimSpace(line[:sep])
+		value := strings.TrimSpace(line[sep+1:])
+
+		if key == "" {
+			continue
+		}
+
+		value = strings.Trim(value, "\"'")
+
+		if envVal := os.Getenv(key); envVal != "" {
+			continue
+		}
+
+		os.Setenv(key, value)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func formatHostWithPort(host, port string) string {
