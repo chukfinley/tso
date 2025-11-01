@@ -126,8 +126,9 @@ fi
 if ! command -v node &> /dev/null; then
     echo -e "${YELLOW}  → Installiere Node.js...${NC}"
     if [ "$VERBOSE" = true ]; then
-        echo -e "${YELLOW}    Füge NodeSource Repository hinzu...${NC}"
-        if ! curl -fsSL https://deb.nodesource.com/setup_18.x | bash -; then
+        echo -e "${YELLOW}    Füge NodeSource Repository hinzu (Node.js 20.x)...${NC}"
+        # Use Node.js 20.x (LTS) instead of 18.x
+        if ! curl -fsSL https://deb.nodesource.com/setup_20.x | bash -; then
             echo -e "${RED}❌ Fehler beim Hinzufügen des NodeSource Repositories!${NC}"
             exit 1
         fi
@@ -137,7 +138,10 @@ if ! command -v node &> /dev/null; then
             exit 1
         fi
     else
-        if ! curl -fsSL https://deb.nodesource.com/setup_18.x | bash - > /dev/null 2>&1; then
+        # Use Node.js 20.x (LTS) instead of 18.x
+        # Suppress deprecation warnings for non-interactive install
+        DEBIAN_FRONTEND=noninteractive curl -fsSL https://deb.nodesource.com/setup_20.x | bash - > /dev/null 2>&1
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo -e "${RED}❌ Fehler beim Hinzufügen des NodeSource Repositories!${NC}"
             exit 1
         fi
@@ -308,13 +312,37 @@ cd "$INSTALL_DIR/go-backend"
 export PATH=$PATH:/usr/local/go/bin
 
 if [ "$VERBOSE" = true ]; then
+    echo -e "${YELLOW}  → Initialisiere und synchronisiere Go Module...${NC}"
+    if ! go mod tidy; then
+        echo -e "${RED}❌ Fehler bei go mod tidy!${NC}"
+        exit 1
+    fi
     echo -e "${YELLOW}  → Installiere Go Dependencies...${NC}"
-    go mod download
+    if ! go mod download; then
+        echo -e "${RED}❌ Fehler beim Herunterladen der Dependencies!${NC}"
+        exit 1
+    fi
     echo -e "${YELLOW}  → Kompiliere Backend...${NC}"
-    go build -o tso-server .
+    if ! go build -o tso-server .; then
+        echo -e "${RED}❌ Fehler beim Kompilieren des Backends!${NC}"
+        exit 1
+    fi
 else
-    go mod download > /dev/null 2>&1
-    go build -o tso-server . > /dev/null 2>&1
+    if ! go mod tidy > /dev/null 2>&1; then
+        echo -e "${RED}❌ Fehler bei go mod tidy!${NC}"
+        echo -e "${YELLOW}   Führen Sie install.sh mit --verbose aus für Details${NC}"
+        exit 1
+    fi
+    if ! go mod download > /dev/null 2>&1; then
+        echo -e "${RED}❌ Fehler beim Herunterladen der Dependencies!${NC}"
+        echo -e "${YELLOW}   Führen Sie install.sh mit --verbose aus für Details${NC}"
+        exit 1
+    fi
+    if ! go build -o tso-server . > /dev/null 2>&1; then
+        echo -e "${RED}❌ Fehler beim Kompilieren des Backends!${NC}"
+        echo -e "${YELLOW}   Führen Sie install.sh mit --verbose aus für Details${NC}"
+        exit 1
+    fi
 fi
 echo -e "${GREEN}✓ Backend gebaut${NC}"
 

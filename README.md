@@ -135,7 +135,7 @@ Siehe [QUICKSTART-LOCAL.md](QUICKSTART-LOCAL.md) für Details.
 ## Anforderungen
 
 - Go 1.21+
-- Node.js 18+
+- Node.js 20+ (LTS)
 - MySQL/MariaDB
 - Debian 10+ / Ubuntu 20.04+
 
