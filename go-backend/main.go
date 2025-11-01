@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -114,21 +115,57 @@ func main() {
 	if installDir == "" {
 		installDir = "/opt/serveros"
 	}
+	
+	// Get current working directory (where backend is running from)
+	workingDir, _ := os.Getwd()
+	if workingDir == "" {
+		workingDir = installDir + "/go-backend"
+	}
+	
+	// Build list of possible frontend directories
 	frontendDirs := []string{
-		"/opt/serveros/frontend/dist",
 		installDir + "/frontend/dist",
+		"/opt/serveros/frontend/dist",
+	}
+	
+	// Add working directory relative paths
+	if workingDir != "" {
+		frontendDirs = append(frontendDirs,
+			filepath.Join(workingDir, "..", "frontend", "dist"),
+			filepath.Join(workingDir, "..", "..", "frontend", "dist"),
+			filepath.Join(filepath.Dir(workingDir), "frontend", "dist"),
+		)
+	}
+	
+	// Add more fallback paths
+	frontendDirs = append(frontendDirs,
+		"/opt/serveros/go-backend/../frontend/dist",
 		"./frontend/dist",
 		"../frontend/dist",
-	}
+	)
 	
 	var frontendDir string
 	for _, dir := range frontendDirs {
-		if _, err := os.Stat(dir); err == nil {
-			if _, err := os.Stat(dir + "/index.html"); err == nil {
-				frontendDir = dir
+		// Clean the path
+		absPath, err := filepath.Abs(dir)
+		if err != nil {
+			continue
+		}
+		
+		// Check if directory exists and has index.html
+		if info, err := os.Stat(absPath); err == nil && info.IsDir() {
+			indexPath := absPath + "/index.html"
+			if _, err := os.Stat(indexPath); err == nil {
+				frontendDir = absPath
+				log.Printf("Frontend found at: %s", frontendDir)
 				break
 			}
 		}
+	}
+	
+	if frontendDir == "" {
+		log.Printf("WARNING: Frontend not found. Searched in: %v", frontendDirs)
+		log.Printf("Install dir: %s, Working dir: %s", installDir, workingDir)
 	}
 	
 	// Serve frontend static files if available
