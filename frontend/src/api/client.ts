@@ -1,9 +1,35 @@
 import axios from 'axios';
 
-const API_BASE_URL = '/api';
+const resolveApiBaseUrl = () => {
+  const envBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '';
+  const trimmedEnvBaseUrl = envBaseUrl.trim();
+  if (trimmedEnvBaseUrl.length > 0) {
+    return trimmedEnvBaseUrl;
+  }
+
+  if (import.meta.env.DEV) {
+    return '/api';
+  }
+
+  if (typeof window === 'undefined') {
+    return '/api';
+  }
+
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+  const envPort = (import.meta.env.VITE_API_PORT as string | undefined) || '';
+  const trimmedPort = envPort.trim();
+  const targetPort = trimmedPort.length > 0 ? trimmedPort : '8080';
+
+  if (targetPort === '80' || targetPort === '443' || targetPort === '') {
+    return `${protocol}//${hostname}/api`;
+  }
+
+  return `${protocol}//${hostname}:${targetPort}/api`;
+};
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: resolveApiBaseUrl(),
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',

@@ -1,6 +1,7 @@
 package main
 
 import (
+    "errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+    "syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -115,19 +117,19 @@ func main() {
 	if installDir == "" {
 		installDir = "/opt/serveros"
 	}
-	
+
 	// Get current working directory (where backend is running from)
 	workingDir, _ := os.Getwd()
 	if workingDir == "" {
 		workingDir = installDir + "/go-backend"
 	}
-	
+
 	// Build list of possible frontend directories
 	frontendDirs := []string{
 		installDir + "/frontend/dist",
 		"/opt/serveros/frontend/dist",
 	}
-	
+
 	// Add working directory relative paths
 	if workingDir != "" {
 		frontendDirs = append(frontendDirs,
@@ -136,33 +138,30 @@ func main() {
 			filepath.Join(filepath.Dir(workingDir), "frontend", "dist"),
 		)
 	}
-	
+
 	// Add more fallback paths
 	frontendDirs = append(frontendDirs,
 		"/opt/serveros/go-backend/../frontend/dist",
 		"./frontend/dist",
 		"../frontend/dist",
 	)
-	
+
 	var frontendDir string
 	for _, dir := range frontendDirs {
-		// Clean the path
 		absPath, err := filepath.Abs(dir)
 		if err != nil {
 			continue
 		}
-		
-		// Check if directory exists
+
 		dirInfo, err := os.Stat(absPath)
 		if err != nil {
 			continue
 		}
-		
+
 		if !dirInfo.IsDir() {
 			continue
 		}
-		
-		// Check if index.html exists
+
 		indexPath := filepath.Join(absPath, "index.html")
 		if _, err := os.Stat(indexPath); err == nil {
 			frontendDir = absPath
@@ -170,54 +169,69 @@ func main() {
 			break
 		}
 	}
-	
+
+	frontendPort := os.Getenv("FRONTEND_PORT")
+	if frontendPort == "" {
+		frontendPort = "80"
+	}
+
 	if frontendDir == "" {
 		log.Printf("⚠ WARNING: Frontend not found!")
 		log.Printf("  Install dir: %s", installDir)
 		log.Printf("  Working dir: %s", workingDir)
 		log.Printf("  Searched in: %v", frontendDirs)
 	}
-	
-	// Serve frontend static files if available
+
+	// API port configuration
+	apiPort := os.Getenv("PORT")
+	if apiPort == "" {
+		apiPort = "8080"
+	}
+
+	// Get server info for startup message and CORS configuration
+	serverIP := getServerIP()
+	hostname := getHostname()
+
+	allowedOrigins := buildAllowedOrigins(serverIP, hostname, frontendPort)
+	apiHandler := withCORS(r, allowedOrigins)
+	log.Printf("CORS allowed origins: %v", allowedOrigins)
+
+	// Serve frontend static files on dedicated port if available
 	if frontendDir != "" {
 		log.Printf("✓ Serving frontend from: %s", frontendDir)
-		
-		// Create file server for frontend directory
+
 		frontendFS := http.FileServer(http.Dir(frontendDir))
-		
-		// Handler function that serves static files or index.html for SPA routing
-		frontendHandler := func(w http.ResponseWriter, req *http.Request) {
-			// Skip API routes - let API router handle them (shouldn't happen due to route order, but safety check)
+		frontendHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			if strings.HasPrefix(req.URL.Path, "/api") {
-				return // Let API routes handle it
+				http.NotFound(w, req)
+				return
 			}
-			
-			// Serve index.html for root path
+
 			if req.URL.Path == "/" || req.URL.Path == "" {
 				http.ServeFile(w, req, filepath.Join(frontendDir, "index.html"))
 				return
 			}
-			
-			// Try to serve the requested file
+
 			requestedPath := filepath.Join(frontendDir, req.URL.Path)
-			
-			// Check if file exists and is not a directory
 			if info, err := os.Stat(requestedPath); err == nil && !info.IsDir() {
-				// File exists - serve it using FileServer for proper MIME types
 				frontendFS.ServeHTTP(w, req)
 				return
 			}
-			
-			// File doesn't exist - serve index.html for SPA routing
+
 			http.ServeFile(w, req, filepath.Join(frontendDir, "index.html"))
-		}
-		
-		// Register handler for all non-API routes
-		// API routes are registered first, so they take precedence
-		// This catch-all handler serves the frontend for all other routes
-		r.PathPrefix("/").HandlerFunc(frontendHandler)
+		})
+
+		go func() {
+			log.Printf("Frontend server starting on port %s", frontendPort)
+			if err := http.ListenAndServe(":"+frontendPort, frontendHandler); err != nil && err != http.ErrServerClosed {
+				if errors.Is(err, syscall.EACCES) {
+					log.Printf("⚠ Unable to bind frontend server to port %s (permission denied). Adjust FRONTEND_PORT or run with elevated privileges.", frontendPort)
+					return
+				}
+				log.Fatalf("Frontend server failed: %v", err)
+			}
+		}()
 	} else {
-		// If frontend not built, serve API info
 		r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			if strings.HasPrefix(req.URL.Path, "/api") {
 				http.NotFound(w, req)
@@ -229,15 +243,18 @@ func main() {
 		})
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	// Check if another web server might conflict with the frontend port
+	existingWebServer := false
+	if cmd := exec.Command("systemctl", "is-active", "--quiet", "nginx"); cmd.Run() == nil {
+		existingWebServer = true
+	} else if cmd := exec.Command("systemctl", "is-active", "--quiet", "apache2"); cmd.Run() == nil {
+		existingWebServer = true
+	}
+	if existingWebServer {
+		log.Printf("⚠ Detected existing web server (nginx/apache2). Ensure it does not conflict with port %s.", frontendPort)
 	}
 
-	// Get server info for startup message
-	serverIP := getServerIP()
-	hostname := getHostname()
-	// installDir was already defined above, just use it
+	// installDir was already defined above, just use it for messaging
 	dbName := os.Getenv("DB_NAME")
 	if dbName == "" {
 		dbName = "servermanager"
@@ -245,14 +262,6 @@ func main() {
 	dbUser := os.Getenv("DB_USER")
 	if dbUser == "" {
 		dbUser = "tso"
-	}
-
-	// Check if web server is running
-	hasWebServer := false
-	if cmd := exec.Command("systemctl", "is-active", "--quiet", "nginx"); cmd.Run() == nil {
-		hasWebServer = true
-	} else if cmd := exec.Command("systemctl", "is-active", "--quiet", "apache2"); cmd.Run() == nil {
-		hasWebServer = true
 	}
 
 	// Print startup message with server info (similar to old script)
@@ -267,13 +276,18 @@ func main() {
 	fmt.Println("")
 	fmt.Println("Web Access:")
 	fmt.Println("-----------")
-	if hasWebServer {
-		fmt.Printf("URL: http://%s\n", serverIP)
-		fmt.Printf("Hostname: http://%s\n", hostname)
+	if frontendDir != "" {
+		fmt.Printf("URL: http://%s\n", formatHostWithPort(serverIP, frontendPort))
+		fmt.Printf("Hostname: http://%s\n", formatHostWithPort(hostname, frontendPort))
 	} else {
-		fmt.Printf("URL: http://%s:%s\n", serverIP, port)
-		fmt.Printf("Hostname: http://%s:%s\n", hostname, port)
+		fmt.Printf("URL: http://%s:%s\n", serverIP, apiPort)
+		fmt.Printf("Hostname: http://%s:%s\n", hostname, apiPort)
 	}
+	fmt.Println("")
+	fmt.Println("API:")
+	fmt.Println("----")
+	fmt.Printf("Base URL: http://%s:%s/api\n", serverIP, apiPort)
+	fmt.Printf("Hostname: http://%s:%s/api\n", hostname, apiPort)
 	fmt.Println("")
 	fmt.Println("Default Login:")
 	fmt.Println("--------------")
@@ -298,7 +312,111 @@ func main() {
 	fmt.Println("")
 	fmt.Println("IMPORTANT: Change default admin password immediately!")
 	fmt.Println("")
-	log.Printf("Server starting on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, r))
+	log.Printf("API server starting on port %s", apiPort)
+	log.Fatal(http.ListenAndServe(":"+apiPort, apiHandler))
+}
+
+func formatHostWithPort(host, port string) string {
+	if host == "" {
+		return host
+	}
+	if port == "" || port == "80" {
+		return host
+	}
+	return fmt.Sprintf("%s:%s", host, port)
+}
+
+func withCORS(handler http.Handler, allowedOrigins []string) http.Handler {
+	allowAny := false
+	for _, origin := range allowedOrigins {
+		if origin == "*" {
+			allowAny = true
+			break
+		}
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" && origin != "null" {
+			if allowAny || isOriginAllowed(origin, allowedOrigins) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			}
+		}
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		handler.ServeHTTP(w, r)
+	})
+}
+
+func isOriginAllowed(origin string, allowedOrigins []string) bool {
+	for _, allowed := range allowedOrigins {
+		if strings.EqualFold(origin, allowed) {
+			return true
+		}
+	}
+	return false
+}
+
+func buildAllowedOrigins(serverIP, hostname, frontendPort string) []string {
+	if env := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS")); env != "" {
+		parts := strings.Split(env, ",")
+		origins := make([]string, 0, len(parts))
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				appendIfMissing(&origins, trimmed)
+			}
+		}
+		return origins
+	}
+
+	origins := []string{}
+	defaultOrigins := []string{
+		"http://localhost",
+		"http://localhost:3000",
+		"http://127.0.0.1",
+		"http://127.0.0.1:3000",
+	}
+
+	for _, origin := range defaultOrigins {
+		appendIfMissing(&origins, origin)
+	}
+
+	addOriginForHost(&origins, hostname, frontendPort)
+	addOriginForHost(&origins, serverIP, frontendPort)
+
+	return origins
+}
+
+func addOriginForHost(origins *[]string, host, port string) {
+	trimmedHost := strings.TrimSpace(host)
+	if trimmedHost == "" || trimmedHost == "localhost" {
+		return
+	}
+
+	appendIfMissing(origins, fmt.Sprintf("http://%s", trimmedHost))
+	if port != "" {
+		appendIfMissing(origins, fmt.Sprintf("http://%s:%s", trimmedHost, port))
+	}
+}
+
+func appendIfMissing(origins *[]string, value string) {
+	if value == "" {
+		return
+	}
+	for _, existing := range *origins {
+		if strings.EqualFold(existing, value) {
+			return
+		}
+	}
+	*origins = append(*origins, value)
 }
 
