@@ -310,14 +310,18 @@ EOF
 # Build backend
 echo -e "${YELLOW}🔨 Baue Backend...${NC}"
 cd "$INSTALL_DIR/go-backend"
-export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+export PATH=$PATH:/usr/local/go/bin:$HOME/.go/bin:$HOME/go/bin:/root/.go/bin
 
 # Find Go binary (avoid aliases by checking file directly)
 GO_BIN=""
 if [ -f "/usr/local/go/bin/go" ]; then
     GO_BIN="/usr/local/go/bin/go"
+elif [ -f "$HOME/.go/bin/go" ]; then
+    GO_BIN="$HOME/.go/bin/go"
 elif [ -f "$HOME/go/bin/go" ]; then
     GO_BIN="$HOME/go/bin/go"
+elif [ -f "/root/.go/bin/go" ]; then
+    GO_BIN="/root/.go/bin/go"
 elif command -v go &> /dev/null; then
     # Last resort: use command -v but verify it's actually a file
     GO_BIN=$(command -v go)

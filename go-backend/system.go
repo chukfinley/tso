@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -77,7 +76,7 @@ func getCPUInfo() map[string]interface{} {
 	// Parse CPU usage from top output
 
 	// Get load average
-	loadAvg, _ := ioutil.ReadFile("/proc/loadavg")
+	loadAvg, _ := os.ReadFile("/proc/loadavg")
 	parts := strings.Fields(string(loadAvg))
 	if len(parts) >= 3 {
 		info["load_avg"] = map[string]float64{
@@ -91,7 +90,7 @@ func getCPUInfo() map[string]interface{} {
 }
 
 func getMemoryInfo() map[string]interface{} {
-	memData, _ := ioutil.ReadFile("/proc/meminfo")
+	memData, _ := os.ReadFile("/proc/meminfo")
 	lines := strings.Split(string(memData), "\n")
 
 	info := map[string]int64{}
@@ -126,7 +125,7 @@ func getMemoryInfo() map[string]interface{} {
 }
 
 func getSwapInfo() map[string]interface{} {
-	memData, _ := ioutil.ReadFile("/proc/meminfo")
+	memData, _ := os.ReadFile("/proc/meminfo")
 	lines := strings.Split(string(memData), "\n")
 
 	info := map[string]int64{}
@@ -159,7 +158,7 @@ func getSwapInfo() map[string]interface{} {
 }
 
 func getUptime() map[string]interface{} {
-	uptimeData, _ := ioutil.ReadFile("/proc/uptime")
+	uptimeData, _ := os.ReadFile("/proc/uptime")
 	parts := strings.Fields(string(uptimeData))
 	if len(parts) == 0 {
 		return map[string]interface{}{
@@ -198,8 +197,8 @@ func getUptime() map[string]interface{} {
 }
 
 func getMotherboardInfo() map[string]interface{} {
-	vendor, _ := ioutil.ReadFile("/sys/class/dmi/id/board_vendor")
-	name, _ := ioutil.ReadFile("/sys/class/dmi/id/board_name")
+	vendor, _ := os.ReadFile("/sys/class/dmi/id/board_vendor")
+	name, _ := os.ReadFile("/sys/class/dmi/id/board_name")
 
 	return map[string]interface{}{
 		"vendor": strings.TrimSpace(string(vendor)),
@@ -234,13 +233,13 @@ func getNetworkInfo() []map[string]interface{} {
 			"tx_formatted": "0 B",
 		}
 
-		operstate, _ := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%s/operstate", iface))
+		operstate, _ := os.ReadFile(fmt.Sprintf("/sys/class/net/%s/operstate", iface))
 		if strings.TrimSpace(string(operstate)) == "up" {
 			info["status"] = "Connected"
 			info["is_up"] = true
 		}
 
-		mac, _ := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%s/address", iface))
+		mac, _ := os.ReadFile(fmt.Sprintf("/sys/class/net/%s/address", iface))
 		info["mac"] = strings.TrimSpace(string(mac))
 
 		cmd := exec.Command("ip", "addr", "show", iface)
@@ -255,8 +254,8 @@ func getNetworkInfo() []map[string]interface{} {
 			}
 		}
 
-		rxBytes, _ := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%s/statistics/rx_bytes", iface))
-		txBytes, _ := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%s/statistics/tx_bytes", iface))
+		rxBytes, _ := os.ReadFile(fmt.Sprintf("/sys/class/net/%s/statistics/rx_bytes", iface))
+		txBytes, _ := os.ReadFile(fmt.Sprintf("/sys/class/net/%s/statistics/tx_bytes", iface))
 		rx, _ := strconv.ParseInt(strings.TrimSpace(string(rxBytes)), 10, 64)
 		tx, _ := strconv.ParseInt(strings.TrimSpace(string(txBytes)), 10, 64)
 		info["rx_bytes"] = rx
