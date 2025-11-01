@@ -263,12 +263,45 @@ else
 fi
 
 # Create admin user
-ADMIN_HASH='$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'  # Password: admin123
 if [ "$VERBOSE" = true ]; then
     echo -e "${YELLOW}  → Erstelle Admin-Benutzer...${NC}"
 fi
+
+# Try to generate bcrypt hash using Go if available
+ADMIN_PASSWORD="admin123"
+ADMIN_HASH=""
+if command -v go &> /dev/null || [ -f "$GO_BIN" ]; then
+    # Generate hash using Go
+    TEMP_HASH_FILE=$(mktemp)
+    cat > "$TEMP_HASH_FILE" <<'GOEOF'
+package main
+import (
+    "fmt"
+    "golang.org/x/crypto/bcrypt"
+)
+func main() {
+    hash, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+    fmt.Print(string(hash))
+}
+GOEOF
+    if [ -f "$GO_BIN" ]; then
+        cd "$(dirname "$TEMP_HASH_FILE")"
+        if "$GO_BIN" run "$TEMP_HASH_FILE" 2>/dev/null | grep -q '^\$2a\$'; then
+            ADMIN_HASH=$("$GO_BIN" run "$TEMP_HASH_FILE" 2>/dev/null)
+        fi
+        rm -f "$TEMP_HASH_FILE"
+    fi
+fi
+
+# Fallback to a pre-generated Go-compatible bcrypt hash if Go generation failed
+if [ -z "$ADMIN_HASH" ] || [ ${#ADMIN_HASH} -lt 50 ]; then
+    # Pre-generated bcrypt hash for "admin123" (Go-compatible $2a$ format)
+    ADMIN_HASH='$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy'
+fi
+
+# Use REPLACE instead of INSERT IGNORE to update password hash if user exists
 mysql -u $DB_USER -p$DB_PASS $DB_NAME <<EOF
-INSERT IGNORE INTO users (username, email, password, full_name, role, is_active) 
+REPLACE INTO users (username, email, password, full_name, role, is_active) 
 VALUES ('admin', 'admin@localhost', '$ADMIN_HASH', 'Administrator', 'admin', 1);
 EOF
 
