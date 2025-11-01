@@ -39,7 +39,16 @@ func ListVMsHandler(w http.ResponseWriter, r *http.Request) {
 	var vms []VirtualMachine
 	for rows.Next() {
 		var vm VirtualMachine
-		// Scan VM fields
+		err := rows.Scan(
+			&vm.ID, &vm.Name, &vm.Description, &vm.UUID, &vm.CPUCores, &vm.RAMMB,
+			&vm.DiskPath, &vm.DiskSizeGB, &vm.DiskFormat, &vm.BootOrder, &vm.ISOPath,
+			&vm.BootFromDisk, &vm.PhysicalDiskDevice, &vm.NetworkMode, &vm.NetworkBridge,
+			&vm.MACAddress, &vm.DisplayType, &vm.SpicePort, &vm.VNCPort, &vm.SpicePassword,
+			&vm.Status, &vm.PID, &vm.CreatedBy, &vm.CreatedAt, &vm.UpdatedAt, &vm.LastStartedAt,
+		)
+		if err != nil {
+			continue
+		}
 		vms = append(vms, vm)
 	}
 
@@ -122,7 +131,13 @@ func GetVMHandler(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	var vm VirtualMachine
-	err = db.QueryRow("SELECT * FROM virtual_machines WHERE id = ?", id).Scan(&vm)
+	err = db.QueryRow("SELECT * FROM virtual_machines WHERE id = ?", id).Scan(
+		&vm.ID, &vm.Name, &vm.Description, &vm.UUID, &vm.CPUCores, &vm.RAMMB,
+		&vm.DiskPath, &vm.DiskSizeGB, &vm.DiskFormat, &vm.BootOrder, &vm.ISOPath,
+		&vm.BootFromDisk, &vm.PhysicalDiskDevice, &vm.NetworkMode, &vm.NetworkBridge,
+		&vm.MACAddress, &vm.DisplayType, &vm.SpicePort, &vm.VNCPort, &vm.SpicePassword,
+		&vm.Status, &vm.PID, &vm.CreatedBy, &vm.CreatedAt, &vm.UpdatedAt, &vm.LastStartedAt,
+	)
 	if err != nil {
 		http.Error(w, "VM not found", http.StatusNotFound)
 		return
@@ -208,7 +223,13 @@ func DeleteVMHandler(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	var vm VirtualMachine
-	err = db.QueryRow("SELECT * FROM virtual_machines WHERE id = ?", id).Scan(&vm)
+	err = db.QueryRow("SELECT * FROM virtual_machines WHERE id = ?", id).Scan(
+		&vm.ID, &vm.Name, &vm.Description, &vm.UUID, &vm.CPUCores, &vm.RAMMB,
+		&vm.DiskPath, &vm.DiskSizeGB, &vm.DiskFormat, &vm.BootOrder, &vm.ISOPath,
+		&vm.BootFromDisk, &vm.PhysicalDiskDevice, &vm.NetworkMode, &vm.NetworkBridge,
+		&vm.MACAddress, &vm.DisplayType, &vm.SpicePort, &vm.VNCPort, &vm.SpicePassword,
+		&vm.Status, &vm.PID, &vm.CreatedBy, &vm.CreatedAt, &vm.UpdatedAt, &vm.LastStartedAt,
+	)
 	if err != nil {
 		http.Error(w, "VM not found", http.StatusNotFound)
 		return
@@ -243,7 +264,13 @@ func StartVMHandler(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	var vm VirtualMachine
-	err = db.QueryRow("SELECT * FROM virtual_machines WHERE id = ?", id).Scan(&vm)
+	err = db.QueryRow("SELECT * FROM virtual_machines WHERE id = ?", id).Scan(
+		&vm.ID, &vm.Name, &vm.Description, &vm.UUID, &vm.CPUCores, &vm.RAMMB,
+		&vm.DiskPath, &vm.DiskSizeGB, &vm.DiskFormat, &vm.BootOrder, &vm.ISOPath,
+		&vm.BootFromDisk, &vm.PhysicalDiskDevice, &vm.NetworkMode, &vm.NetworkBridge,
+		&vm.MACAddress, &vm.DisplayType, &vm.SpicePort, &vm.VNCPort, &vm.SpicePassword,
+		&vm.Status, &vm.PID, &vm.CreatedBy, &vm.CreatedAt, &vm.UpdatedAt, &vm.LastStartedAt,
+	)
 	if err != nil {
 		http.Error(w, "VM not found", http.StatusNotFound)
 		return
@@ -376,7 +403,13 @@ func GetVMSpiceHandler(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	var vm VirtualMachine
-	err = db.QueryRow("SELECT * FROM virtual_machines WHERE id = ?", id).Scan(&vm)
+	err = db.QueryRow("SELECT * FROM virtual_machines WHERE id = ?", id).Scan(
+		&vm.ID, &vm.Name, &vm.Description, &vm.UUID, &vm.CPUCores, &vm.RAMMB,
+		&vm.DiskPath, &vm.DiskSizeGB, &vm.DiskFormat, &vm.BootOrder, &vm.ISOPath,
+		&vm.BootFromDisk, &vm.PhysicalDiskDevice, &vm.NetworkMode, &vm.NetworkBridge,
+		&vm.MACAddress, &vm.DisplayType, &vm.SpicePort, &vm.VNCPort, &vm.SpicePassword,
+		&vm.Status, &vm.PID, &vm.CreatedBy, &vm.CreatedAt, &vm.UpdatedAt, &vm.LastStartedAt,
+	)
 	if err != nil {
 		http.Error(w, "VM not found", http.StatusNotFound)
 		return
@@ -515,7 +548,13 @@ func CreateVMBackupHandler(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	var vm VirtualMachine
-	err = db.QueryRow("SELECT * FROM virtual_machines WHERE id = ?", vmID).Scan(&vm)
+	err = db.QueryRow("SELECT * FROM virtual_machines WHERE id = ?", vmID).Scan(
+		&vm.ID, &vm.Name, &vm.Description, &vm.UUID, &vm.CPUCores, &vm.RAMMB,
+		&vm.DiskPath, &vm.DiskSizeGB, &vm.DiskFormat, &vm.BootOrder, &vm.ISOPath,
+		&vm.BootFromDisk, &vm.PhysicalDiskDevice, &vm.NetworkMode, &vm.NetworkBridge,
+		&vm.MACAddress, &vm.DisplayType, &vm.SpicePort, &vm.VNCPort, &vm.SpicePassword,
+		&vm.Status, &vm.PID, &vm.CreatedBy, &vm.CreatedAt, &vm.UpdatedAt, &vm.LastStartedAt,
+	)
 	if err != nil {
 		http.Error(w, "VM not found", http.StatusNotFound)
 		return
@@ -580,7 +619,11 @@ func RestoreBackupHandler(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	var backup VMBackup
-	err = db.QueryRow("SELECT * FROM vm_backups WHERE id = ?", backupID).Scan(&backup)
+	err = db.QueryRow("SELECT * FROM vm_backups WHERE id = ?", backupID).Scan(
+		&backup.ID, &backup.VMID, &backup.VMName, &backup.BackupName, &backup.BackupPath,
+		&backup.BackupSize, &backup.Compressed, &backup.CompressionType, &backup.Status,
+		&backup.CreatedBy, &backup.CreatedAt, &backup.CompletedAt, &backup.Notes,
+	)
 	if err != nil {
 		http.Error(w, "Backup not found", http.StatusNotFound)
 		return

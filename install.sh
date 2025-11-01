@@ -373,11 +373,10 @@ if [ "$VERBOSE" = true ]; then
     fi
     
     echo -e "${YELLOW}  → Kompiliere Backend...${NC}"
-    GO_BUILD_OUTPUT=$("$GO_BIN" build -o tso-server . 2>&1)
-    GO_BUILD_STATUS=$?
-    if [ $GO_BUILD_STATUS -ne 0 ]; then
+    if ! "$GO_BIN" build -o tso-server . 2>&1 | tee /tmp/go-build-output.log; then
         echo -e "${RED}❌ Fehler beim Kompilieren des Backends!${NC}"
-        echo "$GO_BUILD_OUTPUT"
+        echo -e "${YELLOW}Build-Output:${NC}"
+        cat /tmp/go-build-output.log
         exit 1
     fi
 else
