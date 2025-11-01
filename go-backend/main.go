@@ -108,35 +108,66 @@ func main() {
 	api.HandleFunc("/logs", RequireAuth(GetLogsHandler)).Methods("GET")
 	api.HandleFunc("/logs/activity", RequireAuth(GetActivityLogsHandler)).Methods("GET")
 
-	// Frontend routes (serve index.html for SPA routing)
-	// In development, frontend is served separately by Vite
-	// In production, use nginx or another web server to serve frontend/dist
-	r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip API routes
-		if strings.HasPrefix(r.URL.Path, "/api") {
-			http.NotFound(w, r)
-			return
-		}
-		
-		// Try multiple possible frontend paths
-		frontendPaths := []string{
-			"./frontend/dist/index.html",
-			"/opt/serveros/frontend/dist/index.html",
-			"../frontend/dist/index.html",
-		}
-		
-		for _, path := range frontendPaths {
-			if _, err := os.Stat(path); err == nil {
-				http.ServeFile(w, r, path)
-				return
+	// Frontend routes (serve static files and SPA routing)
+	// Find frontend dist directory
+	installDir := os.Getenv("INSTALL_DIR")
+	if installDir == "" {
+		installDir = "/opt/serveros"
+	}
+	frontendDirs := []string{
+		"/opt/serveros/frontend/dist",
+		installDir + "/frontend/dist",
+		"./frontend/dist",
+		"../frontend/dist",
+	}
+	
+	var frontendDir string
+	for _, dir := range frontendDirs {
+		if _, err := os.Stat(dir); err == nil {
+			if _, err := os.Stat(dir + "/index.html"); err == nil {
+				frontendDir = dir
+				break
 			}
 		}
+	}
+	
+	// Serve frontend static files if available
+	if frontendDir != "" {
+		// Handler function that serves static files or index.html for SPA routing
+		frontendHandler := func(w http.ResponseWriter, req *http.Request) {
+			// Skip API routes
+			if strings.HasPrefix(req.URL.Path, "/api") {
+				http.NotFound(w, req)
+				return
+			}
+			
+			// Check if requested file exists
+			requestedPath := frontendDir + req.URL.Path
+			if info, err := os.Stat(requestedPath); err == nil && !info.IsDir() {
+				// File exists, serve it
+				http.ServeFile(w, req, requestedPath)
+				return
+			}
+			
+			// File doesn't exist - serve index.html for SPA routing
+			http.ServeFile(w, req, frontendDir+"/index.html")
+		}
 		
+		// Register handler for all non-API routes
+		// This must come after API routes but will match everything else
+		r.PathPrefix("/").HandlerFunc(frontendHandler)
+	} else {
 		// If frontend not built, serve API info
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message":"TSO API","version":"2.0","status":"running","frontend":"not built - run 'cd frontend && npm run build'"}`))
-	})
+		r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			if strings.HasPrefix(req.URL.Path, "/api") {
+				http.NotFound(w, req)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"message":"TSO API","version":"2.0","status":"running","frontend":"not built - run 'cd frontend && npm run build'"}`))
+		})
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {

@@ -305,6 +305,7 @@ DB_USER=$DB_USER
 DB_PASS=$DB_PASS
 SESSION_SECRET=$SESSION_SECRET
 PORT=$BACKEND_PORT
+INSTALL_DIR=$INSTALL_DIR
 EOF
 
 # Build backend
@@ -453,6 +454,7 @@ User=root
 WorkingDirectory=$INSTALL_DIR/go-backend
 EnvironmentFile=$INSTALL_DIR/go-backend/.env
 Environment="PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="INSTALL_DIR=$INSTALL_DIR"
 ExecStart=$INSTALL_DIR/go-backend/tso-server
 Restart=always
 RestartSec=5
