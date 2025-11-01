@@ -1,9 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -93,7 +97,8 @@ func main() {
 
 	// System routes
 	api.HandleFunc("/system/stats", RequireAuth(GetSystemStatsHandler)).Methods("GET")
-	api.HandleFunc("/system/update", RequireAuth(RequireAdmin(SystemUpdateHandler))).Methods("POST")
+	api.HandleFunc("/system/info", GetServerInfoHandler).Methods("GET")
+	api.HandleFunc("/system/update", RequireAuth(RequireAdmin(SystemUpdateHandler)))).Methods("POST")
 	api.HandleFunc("/system/control", RequireAuth(RequireAdmin(SystemControlHandler))).Methods("POST")
 
 	// Terminal routes
@@ -107,15 +112,30 @@ func main() {
 	// In development, frontend is served separately by Vite
 	// In production, use nginx or another web server to serve frontend/dist
 	r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Serve frontend files if dist exists, otherwise redirect to login
-		if _, err := os.Stat("./frontend/dist/index.html"); err == nil {
-			http.ServeFile(w, r, "./frontend/dist/index.html")
-		} else {
-			// If frontend not built, serve API info
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"message":"TSO API","version":"2.0","status":"running","frontend":"not built - run 'cd frontend && npm run build'"}`))
+		// Skip API routes
+		if strings.HasPrefix(r.URL.Path, "/api") {
+			http.NotFound(w, r)
+			return
 		}
+		
+		// Try multiple possible frontend paths
+		frontendPaths := []string{
+			"./frontend/dist/index.html",
+			"/opt/serveros/frontend/dist/index.html",
+			"../frontend/dist/index.html",
+		}
+		
+		for _, path := range frontendPaths {
+			if _, err := os.Stat(path); err == nil {
+				http.ServeFile(w, r, path)
+				return
+			}
+		}
+		
+		// If frontend not built, serve API info
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"message":"TSO API","version":"2.0","status":"running","frontend":"not built - run 'cd frontend && npm run build'"}`))
 	})
 
 	port := os.Getenv("PORT")
@@ -123,6 +143,73 @@ func main() {
 		port = "8080"
 	}
 
+	// Get server info for startup message
+	serverIP := getServerIP()
+	hostname := getHostname()
+	installDir := os.Getenv("INSTALL_DIR")
+	if installDir == "" {
+		installDir = "/opt/serveros"
+	}
+	dbName := os.Getenv("DB_NAME")
+	if dbName == "" {
+		dbName = "servermanager"
+	}
+	dbUser := os.Getenv("DB_USER")
+	if dbUser == "" {
+		dbUser = "tso"
+	}
+
+	// Check if web server is running
+	hasWebServer := false
+	if cmd := exec.Command("systemctl", "is-active", "--quiet", "nginx"); cmd.Run() == nil {
+		hasWebServer = true
+	} else if cmd := exec.Command("systemctl", "is-active", "--quiet", "apache2"); cmd.Run() == nil {
+		hasWebServer = true
+	}
+
+	// Print startup message with server info (similar to old script)
+	fmt.Println("")
+	fmt.Println("╔════════════════════════════════════════════════════════════════╗")
+	fmt.Println("║                  TSO Server Started!                          ║")
+	fmt.Println("╚════════════════════════════════════════════════════════════════╝")
+	fmt.Println("")
+	fmt.Println("ServerOS Installation Credentials")
+	fmt.Println("==================================")
+	fmt.Printf("Generated: %s\n", time.Now().Format("Mon Jan 2 15:04:05 MST 2006"))
+	fmt.Println("")
+	fmt.Println("Web Access:")
+	fmt.Println("-----------")
+	if hasWebServer {
+		fmt.Printf("URL: http://%s\n", serverIP)
+		fmt.Printf("Hostname: http://%s\n", hostname)
+	} else {
+		fmt.Printf("URL: http://%s:%s\n", serverIP, port)
+		fmt.Printf("Hostname: http://%s:%s\n", hostname, port)
+	}
+	fmt.Println("")
+	fmt.Println("Default Login:")
+	fmt.Println("--------------")
+	fmt.Println("Username: admin")
+	fmt.Println("Password: admin123")
+	fmt.Println("")
+	fmt.Println("Database:")
+	fmt.Println("---------")
+	fmt.Printf("Database: %s\n", dbName)
+	fmt.Printf("User: %s\n", dbUser)
+	if dbPass := os.Getenv("DB_PASS"); dbPass != "" {
+		fmt.Printf("Password: %s\n", dbPass)
+	}
+	fmt.Println("")
+	fmt.Println("Installation Path:")
+	fmt.Println("------------------")
+	fmt.Printf("%s\n", installDir)
+	fmt.Println("")
+	fmt.Println("Apache Config:")
+	fmt.Println("--------------")
+	fmt.Println("/etc/apache2/sites-available/serveros.conf")
+	fmt.Println("")
+	fmt.Println("IMPORTANT: Change default admin password immediately!")
+	fmt.Println("")
 	log.Printf("Server starting on port %s", port)
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -384,20 +385,54 @@ func GetLogsHandler(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	query := "SELECT sl.*, u.username FROM system_logs sl LEFT JOIN users u ON sl.user_id = u.id"
+	var rows *sql.Rows
 	if level != "" {
 		query += " WHERE sl.level = ?"
 		query += " ORDER BY sl.created_at DESC LIMIT ?"
-		rows, _ := db.Query(query, level, limit)
-		defer rows.Close()
-		// Process rows
+		rows, err = db.Query(query, level, limit)
 	} else {
 		query += " ORDER BY sl.created_at DESC LIMIT ?"
-		rows, _ := db.Query(query, limit)
-		defer rows.Close()
-		// Process rows
+		rows, err = db.Query(query, limit)
 	}
 
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
 	logs := []map[string]interface{}{}
+	for rows.Next() {
+		var log SystemLog
+		var userID sql.NullInt64
+		var username sql.NullString
+		err := rows.Scan(
+			&log.ID, &log.Level, &log.Message, &log.Context,
+			&userID, &log.IPAddress, &log.CreatedAt, &username,
+		)
+		if err != nil {
+			continue
+		}
+		
+		logMap := map[string]interface{}{
+			"id":         log.ID,
+			"level":      log.Level,
+			"message":    log.Message,
+			"context":    log.Context,
+			"ip_address": log.IPAddress,
+			"created_at": log.CreatedAt,
+		}
+		
+		if userID.Valid {
+			logMap["user_id"] = userID.Int64
+		}
+		if username.Valid {
+			logMap["username"] = username.String
+		}
+		
+		logs = append(logs, logMap)
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"logs":    logs,
@@ -453,5 +488,124 @@ func GetActivityLogsHandler(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"logs":    logs,
 	})
+}
+
+func GetServerInfoHandler(w http.ResponseWriter, r *http.Request) {
+	serverIP := getServerIP()
+	hostname := getHostname()
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	info := map[string]interface{}{
+		"ip":          serverIP,
+		"hostname":    hostname,
+		"port":        port,
+		"url":         fmt.Sprintf("http://%s", serverIP),
+		"url_hostname": fmt.Sprintf("http://%s", hostname),
+		"api_url":     fmt.Sprintf("http://%s:%s/api", serverIP, port),
+	}
+
+	// Get installation directory from environment or default
+	installDir := os.Getenv("INSTALL_DIR")
+	if installDir == "" {
+		installDir = "/opt/serveros"
+	}
+
+	// Check if nginx or apache is running (indicating web server setup)
+	nginxRunning := false
+	if cmd := exec.Command("systemctl", "is-active", "--quiet", "nginx"); cmd.Run() == nil {
+		nginxRunning = true
+	} else if cmd := exec.Command("systemctl", "is-active", "--quiet", "apache2"); cmd.Run() == nil {
+		nginxRunning = true
+	}
+	
+	if nginxRunning {
+		info["web_url"] = fmt.Sprintf("http://%s", serverIP)
+		info["web_url_hostname"] = fmt.Sprintf("http://%s", hostname)
+	} else {
+		info["web_url"] = fmt.Sprintf("http://%s:%s", serverIP, port)
+		info["web_url_hostname"] = fmt.Sprintf("http://%s:%s", hostname, port)
+	}
+
+	info["install_dir"] = installDir
+	info["apache_config"] = "/etc/apache2/sites-available/serveros.conf"
+
+	// Get database info
+	dbName := os.Getenv("DB_NAME")
+	if dbName == "" {
+		dbName = "servermanager"
+	}
+	dbUser := os.Getenv("DB_USER")
+	if dbUser == "" {
+		dbUser = "tso"
+	}
+	dbPass := os.Getenv("DB_PASS")
+
+	info["database"] = map[string]interface{}{
+		"name":     dbName,
+		"user":     dbUser,
+		"password": dbPass,
+	}
+
+	info["credentials"] = map[string]interface{}{
+		"username": "admin",
+		"password": "admin123",
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"info":    info,
+	})
+}
+
+func getServerIP() string {
+	// Try to get IP from hostname -I command
+	cmd := exec.Command("hostname", "-I")
+	output, err := cmd.Output()
+	if err == nil {
+		ips := strings.Fields(string(output))
+		if len(ips) > 0 {
+			return strings.TrimSpace(ips[0])
+		}
+	}
+
+	// Fallback: try ip command
+	cmd = exec.Command("ip", "-4", "addr", "show")
+	output, err = cmd.Output()
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "inet ") {
+				parts := strings.Fields(line)
+				if len(parts) >= 2 {
+					ip := strings.Split(parts[1], "/")[0]
+					if ip != "127.0.0.1" {
+						return ip
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback to network interfaces
+	netInfo := getNetworkInfo()
+	for _, iface := range netInfo {
+		if ip, ok := iface["ip"].(string); ok && ip != "N/A" && ip != "127.0.0.1" {
+			return ip
+		}
+	}
+
+	return "127.0.0.1"
+}
+
+func getHostname() string {
+	cmd := exec.Command("hostname")
+	output, err := cmd.Output()
+	if err == nil {
+		return strings.TrimSpace(string(output))
+	}
+	return "localhost"
 }
 
