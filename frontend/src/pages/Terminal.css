@@ -10,6 +10,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  gap: 16px;
 }
 
 .terminal-header h1 {
@@ -18,12 +19,31 @@
   color: #e0e0e0;
 }
 
+.terminal-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.status-text {
+  font-size: 0.875rem;
+  color: #888;
+}
+
 .terminal-actions {
   display: flex;
   gap: 8px;
 }
 
-.btn-clear {
+.btn-terminal {
   padding: 8px 16px;
   background: #3a3a3a;
   color: #e0e0e0;
@@ -34,8 +54,13 @@
   transition: background-color 0.2s;
 }
 
-.btn-clear:hover {
+.btn-terminal:hover:not(:disabled) {
   background: #4a4a4a;
+}
+
+.btn-terminal:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .terminal-container {
@@ -44,119 +69,46 @@
   border-radius: 8px;
   border: 1px solid #333;
   overflow: hidden;
-  cursor: text;
+  min-height: 400px;
 }
 
-.terminal-output {
+.terminal-xterm {
+  width: 100%;
   height: 100%;
-  padding: 16px;
-  overflow-y: auto;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
-  font-size: 14px;
-  line-height: 1.5;
+  padding: 8px;
+  box-sizing: border-box;
 }
 
-.terminal-welcome {
-  color: #888;
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #333;
+/* xterm.js overrides */
+.terminal-xterm .xterm {
+  height: 100%;
+  padding: 8px;
 }
 
-.terminal-entry {
-  margin-bottom: 8px;
+.terminal-xterm .xterm-viewport {
+  overflow-y: auto !important;
 }
 
-.terminal-command-line,
-.terminal-input-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.terminal-xterm .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
 }
 
-.terminal-prompt {
-  display: flex;
-  white-space: nowrap;
+.terminal-xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: #1a1a1a;
 }
 
-.prompt-user {
-  color: #4ec9b0;
-  font-weight: bold;
+.terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 4px;
 }
 
-.prompt-at {
-  color: #808080;
+.terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: #4a4a4a;
 }
 
-.prompt-host {
-  color: #569cd6;
-  font-weight: bold;
-}
-
-.prompt-colon {
-  color: #808080;
-}
-
-.prompt-path {
-  color: #dcdcaa;
-}
-
-.prompt-symbol {
-  color: #808080;
-  margin-left: 4px;
-}
-
-.terminal-command {
-  color: #e0e0e0;
-}
-
-.terminal-output-text {
-  margin: 4px 0 0 0;
-  padding: 0;
-  color: #c0c0c0;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
-}
-
-.terminal-output-text.error {
-  color: #f44747;
-}
-
-.terminal-input-line {
-  margin-top: 8px;
-}
-
-.terminal-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: #e0e0e0;
-  font-family: inherit;
-  font-size: inherit;
-  outline: none;
-  caret-color: #4ec9b0;
-}
-
-.terminal-input:disabled {
-  opacity: 0.7;
-}
-
-.terminal-spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid #4ec9b0;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+/* Fix xterm canvas sizing */
+.terminal-xterm .xterm-screen {
+  height: 100%;
 }
 
 .terminal-hints {
@@ -174,20 +126,22 @@
   gap: 4px;
 }
 
-/* Scrollbar styling */
-.terminal-output::-webkit-scrollbar {
-  width: 8px;
+/* Focus styling for terminal */
+.terminal-xterm:focus-within {
+  outline: none;
 }
 
-.terminal-output::-webkit-scrollbar-track {
-  background: #1a1a1a;
+/* Selection color override */
+.terminal-xterm .xterm-selection div {
+  background-color: rgba(78, 201, 176, 0.3) !important;
 }
 
-.terminal-output::-webkit-scrollbar-thumb {
-  background: #3a3a3a;
-  border-radius: 4px;
+/* Cursor styling */
+.terminal-xterm .xterm-cursor-layer {
+  z-index: 1;
 }
 
-.terminal-output::-webkit-scrollbar-thumb:hover {
-  background: #4a4a4a;
+/* Link styling in terminal */
+.terminal-xterm .xterm-link-layer {
+  z-index: 2;
 }

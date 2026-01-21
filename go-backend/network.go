@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -31,6 +32,12 @@ var (
 	prevProcessBandwidth     = make(map[int]processBandwidthReading)
 	prevProcessBandwidthLock sync.RWMutex
 
+	// Per-process bandwidth history
+	processHistory          = make(map[int][]ProcessHistoryEntry)
+	processHistoryLock      sync.RWMutex
+	maxProcessHistorySize   = 120 // 2 minutes of history per process
+	maxTrackedProcesses     = 100 // Limit number of tracked processes
+
 	// Network event log
 	networkEvents     []NetworkEvent
 	networkEventsLock sync.RWMutex
@@ -47,6 +54,33 @@ type processBandwidthReading struct {
 	RxBytes   int64
 	TxBytes   int64
 	Timestamp time.Time
+}
+
+type ProcessHistoryEntry struct {
+	Timestamp time.Time `json:"timestamp"`
+	RxSpeed   float64   `json:"rx_speed"`
+	TxSpeed   float64   `json:"tx_speed"`
+	RxBytes   int64     `json:"rx_bytes"`
+	TxBytes   int64     `json:"tx_bytes"`
+}
+
+type ProcessDetails struct {
+	PID         int                   `json:"pid"`
+	Name        string                `json:"name"`
+	Cmdline     string                `json:"cmdline"`
+	User        string                `json:"user"`
+	State       string                `json:"state"`
+	Threads     int                   `json:"threads"`
+	MemoryRSS   int64                 `json:"memory_rss"`
+	MemoryVMS   int64                 `json:"memory_vms"`
+	CPUPercent  float64               `json:"cpu_percent"`
+	StartTime   string                `json:"start_time"`
+	Connections int                   `json:"connections"`
+	RxBytes     int64                 `json:"rx_bytes"`
+	TxBytes     int64                 `json:"tx_bytes"`
+	RxSpeed     float64               `json:"rx_speed"`
+	TxSpeed     float64               `json:"tx_speed"`
+	History     []ProcessHistoryEntry `json:"history"`
 }
 
 type BandwidthHistoryEntry struct {
@@ -367,6 +401,286 @@ func ResetSessionStatsHandler(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"message": "Session statistics reset",
 	})
+}
+
+// GetProcessDetailsHandler returns detailed info about a process including network history
+func GetProcessDetailsHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	pidStr := vars["pid"]
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		http.Error(w, "Invalid PID", http.StatusBadRequest)
+		return
+	}
+
+	// Check if process exists
+	if _, err := os.Stat(fmt.Sprintf("/proc/%d", pid)); os.IsNotExist(err) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "Process not found",
+		})
+		return
+	}
+
+	details := getProcessDetails(pid)
+	if details == nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "Failed to get process details",
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"process": details,
+	})
+}
+
+// GetProcessHistoryHandler returns network history for a specific process
+func GetProcessHistoryHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	pidStr := vars["pid"]
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		http.Error(w, "Invalid PID", http.StatusBadRequest)
+		return
+	}
+
+	processHistoryLock.RLock()
+	history := processHistory[pid]
+	processHistoryLock.RUnlock()
+
+	if history == nil {
+		history = []ProcessHistoryEntry{}
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"pid":     pid,
+		"history": history,
+	})
+}
+
+// KillProcessHandler kills a process by PID
+func KillProcessHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	pidStr := vars["pid"]
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		http.Error(w, "Invalid PID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Signal string `json:"signal"` // "TERM", "KILL", "INT", etc.
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Default to TERM
+		req.Signal = "TERM"
+	}
+
+	// Map signal name to syscall signal
+	var sig os.Signal
+	switch strings.ToUpper(req.Signal) {
+	case "KILL", "9":
+		sig = syscall.SIGKILL
+	case "INT", "2":
+		sig = syscall.SIGINT
+	case "HUP", "1":
+		sig = syscall.SIGHUP
+	case "QUIT", "3":
+		sig = syscall.SIGQUIT
+	default:
+		sig = syscall.SIGTERM
+	}
+
+	// Get process name for logging
+	procName := ""
+	if data, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid)); err == nil {
+		procName = strings.TrimSpace(string(data))
+	}
+
+	// Find the process
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("Process not found: %v", err),
+		})
+		return
+	}
+
+	// Send signal
+	err = process.Signal(sig)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to send signal: %v", err),
+		})
+		return
+	}
+
+	logNetworkEvent("process_killed", "", fmt.Sprintf("Process %s (PID %d) sent signal %s", procName, pid, req.Signal), "")
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("Signal %s sent to process %d", req.Signal, pid),
+	})
+}
+
+// getProcessDetails fetches detailed information about a process
+func getProcessDetails(pid int) *ProcessDetails {
+	details := &ProcessDetails{
+		PID: pid,
+	}
+
+	// Get process name
+	if data, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid)); err == nil {
+		details.Name = strings.TrimSpace(string(data))
+	}
+
+	// Get cmdline
+	if data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid)); err == nil {
+		// Replace null bytes with spaces
+		details.Cmdline = strings.ReplaceAll(string(data), "\x00", " ")
+		details.Cmdline = strings.TrimSpace(details.Cmdline)
+	}
+
+	// Get status info
+	if data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid)); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			if strings.HasPrefix(line, "State:") {
+				parts := strings.Fields(line)
+				if len(parts) >= 2 {
+					details.State = parts[1]
+				}
+			} else if strings.HasPrefix(line, "Uid:") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					uid := fields[1]
+					details.User = uid
+					if userData, err := exec.Command("id", "-nu", uid).Output(); err == nil {
+						details.User = strings.TrimSpace(string(userData))
+					}
+				}
+			} else if strings.HasPrefix(line, "Threads:") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					details.Threads, _ = strconv.Atoi(fields[1])
+				}
+			} else if strings.HasPrefix(line, "VmRSS:") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					val, _ := strconv.ParseInt(fields[1], 10, 64)
+					details.MemoryRSS = val * 1024 // Convert from kB to bytes
+				}
+			} else if strings.HasPrefix(line, "VmSize:") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					val, _ := strconv.ParseInt(fields[1], 10, 64)
+					details.MemoryVMS = val * 1024
+				}
+			}
+		}
+	}
+
+	// Get start time
+	if data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid)); err == nil {
+		fields := strings.Fields(string(data))
+		if len(fields) > 21 {
+			starttime, _ := strconv.ParseInt(fields[21], 10, 64)
+			// Convert from clock ticks to time
+			if uptimeData, err := os.ReadFile("/proc/uptime"); err == nil {
+				uptimeParts := strings.Fields(string(uptimeData))
+				if len(uptimeParts) > 0 {
+					uptime, _ := strconv.ParseFloat(uptimeParts[0], 64)
+					ticksPerSec := int64(100) // Usually 100 Hz
+					startSeconds := float64(starttime) / float64(ticksPerSec)
+					processUptime := uptime - startSeconds
+					startTime := time.Now().Add(-time.Duration(processUptime) * time.Second)
+					details.StartTime = startTime.Format(time.RFC3339)
+				}
+			}
+		}
+	}
+
+	// Get network stats from our tracking
+	prevProcessBandwidthLock.RLock()
+	if prev, ok := prevProcessBandwidth[pid]; ok {
+		details.RxBytes = prev.RxBytes
+		details.TxBytes = prev.TxBytes
+	}
+	prevProcessBandwidthLock.RUnlock()
+
+	// Get history
+	processHistoryLock.RLock()
+	if hist, ok := processHistory[pid]; ok {
+		details.History = hist
+		// Calculate current speed from last entries
+		if len(hist) >= 2 {
+			last := hist[len(hist)-1]
+			details.RxSpeed = last.RxSpeed
+			details.TxSpeed = last.TxSpeed
+		}
+	} else {
+		details.History = []ProcessHistoryEntry{}
+	}
+	processHistoryLock.RUnlock()
+
+	// Count connections
+	cmd := exec.Command("ss", "-tunap")
+	if output, err := cmd.Output(); err == nil {
+		pidStr := fmt.Sprintf("pid=%d,", pid)
+		for _, line := range strings.Split(string(output), "\n") {
+			if strings.Contains(line, pidStr) {
+				details.Connections++
+			}
+		}
+	}
+
+	return details
+}
+
+// addProcessHistory adds a history entry for a process
+func addProcessHistory(pid int, rxSpeed, txSpeed float64, rxBytes, txBytes int64) {
+	processHistoryLock.Lock()
+	defer processHistoryLock.Unlock()
+
+	entry := ProcessHistoryEntry{
+		Timestamp: time.Now(),
+		RxSpeed:   rxSpeed,
+		TxSpeed:   txSpeed,
+		RxBytes:   rxBytes,
+		TxBytes:   txBytes,
+	}
+
+	history := processHistory[pid]
+	history = append(history, entry)
+
+	// Keep only last maxProcessHistorySize entries
+	if len(history) > maxProcessHistorySize {
+		history = history[len(history)-maxProcessHistorySize:]
+	}
+
+	processHistory[pid] = history
+
+	// Cleanup old processes if too many tracked
+	if len(processHistory) > maxTrackedProcesses {
+		// Remove oldest process (simple cleanup)
+		var oldestPid int
+		var oldestTime time.Time
+		for p, h := range processHistory {
+			if len(h) > 0 && (oldestTime.IsZero() || h[0].Timestamp.Before(oldestTime)) {
+				oldestPid = p
+				oldestTime = h[0].Timestamp
+			}
+		}
+		if oldestPid != 0 {
+			delete(processHistory, oldestPid)
+		}
+	}
 }
 
 func getDetailedNetworkInterfaces() []NetworkInterface {
@@ -767,6 +1081,11 @@ func getNetworkProcesses() []NetworkProcess {
 			Timestamp: now,
 		}
 		prevProcessBandwidthLock.Unlock()
+
+		// Add to process history (only for active processes with some bandwidth)
+		if proc.RxSpeed > 0 || proc.TxSpeed > 0 || data.rxBytes > 0 || data.txBytes > 0 {
+			addProcessHistory(pid, proc.RxSpeed, proc.TxSpeed, data.rxBytes, data.txBytes)
+		}
 
 		processes = append(processes, proc)
 	}

@@ -133,6 +133,11 @@ func main() {
 	api.HandleFunc("/network/throttle", RequireAuth(RequireAdmin(SetProcessThrottleHandler))).Methods("POST")
 	api.HandleFunc("/network/throttle/{pid}", RequireAuth(RequireAdmin(RemoveProcessThrottleHandler))).Methods("DELETE")
 
+	// Process management routes
+	api.HandleFunc("/network/process/{pid}", RequireAuth(GetProcessDetailsHandler)).Methods("GET")
+	api.HandleFunc("/network/process/{pid}/history", RequireAuth(GetProcessHistoryHandler)).Methods("GET")
+	api.HandleFunc("/network/process/{pid}/kill", RequireAuth(RequireAdmin(KillProcessHandler))).Methods("POST")
+
 	// Frontend routes (serve static files and SPA routing)
 	// Find frontend dist directory
 	installDir := os.Getenv("INSTALL_DIR")

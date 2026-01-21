@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { networkAPI, NetworkInterface, NetworkProcess, NetworkConnection, BandwidthHistoryEntry, NetworkEvent, ProcessThrottle } from '../api';
+import { networkAPI, NetworkInterface, NetworkProcess, NetworkConnection, BandwidthHistoryEntry, NetworkEvent, ProcessThrottle, ProcessDetails, ProcessHistoryEntry } from '../api';
 import './Network.css';
 
 type TabType = 'interfaces' | 'processes' | 'connections' | 'events';
@@ -10,6 +10,13 @@ interface ThrottleModalState {
   name: string;
   downloadLimit: string;
   uploadLimit: string;
+}
+
+interface ProcessModalState {
+  show: boolean;
+  loading: boolean;
+  details: ProcessDetails | null;
+  error: string | null;
 }
 
 function Network() {
@@ -29,7 +36,9 @@ function Network() {
   const [throttleModal, setThrottleModal] = useState<ThrottleModalState | null>(null);
   const [throttleSupported, setThrottleSupported] = useState<boolean | null>(null);
   const [throttleError, setThrottleError] = useState<string | null>(null);
+  const [processModal, setProcessModal] = useState<ProcessModalState | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const processCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     fetchData();
@@ -286,6 +295,131 @@ function Network() {
     return throttles.find(t => t.pid === pid);
   };
 
+  const openProcessModal = async (pid: number) => {
+    setProcessModal({ show: true, loading: true, details: null, error: null });
+    try {
+      const details = await networkAPI.getProcessDetails(pid);
+      setProcessModal({ show: true, loading: false, details, error: null });
+      // Draw process history chart after modal opens
+      setTimeout(() => drawProcessChart(details.history), 100);
+    } catch (err) {
+      setProcessModal({ show: true, loading: false, details: null, error: 'Failed to load process details' });
+    }
+  };
+
+  const refreshProcessModal = async () => {
+    if (!processModal?.details) return;
+    const pid = processModal.details.pid;
+    try {
+      const details = await networkAPI.getProcessDetails(pid);
+      setProcessModal({ ...processModal, details });
+      drawProcessChart(details.history);
+    } catch {
+      // Ignore refresh errors
+    }
+  };
+
+  const handleKillProcess = async (signal: string) => {
+    if (!processModal?.details) return;
+    const pid = processModal.details.pid;
+    const name = processModal.details.name;
+
+    if (!confirm(`Are you sure you want to send ${signal} signal to ${name} (PID ${pid})?`)) {
+      return;
+    }
+
+    try {
+      const result = await networkAPI.killProcess(pid, signal);
+      if (result.success) {
+        setProcessModal(null);
+        await fetchData();
+      } else {
+        setError(result.error || 'Failed to kill process');
+      }
+    } catch (err) {
+      setError('Failed to send signal to process');
+    }
+  };
+
+  const drawProcessChart = (history: ProcessHistoryEntry[]) => {
+    const canvas = processCanvasRef.current;
+    if (!canvas || history.length < 2) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const padding = { top: 10, right: 10, bottom: 20, left: 50 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    // Clear canvas
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, width, height);
+
+    // Find max value
+    const maxRx = Math.max(...history.map(h => h.rx_speed), 1);
+    const maxTx = Math.max(...history.map(h => h.tx_speed), 1);
+    const maxValue = Math.max(maxRx, maxTx) * 1.1;
+
+    // Draw grid
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = padding.top + (chartHeight / 4) * i;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(width - padding.right, y);
+      ctx.stroke();
+
+      const value = maxValue - (maxValue / 4) * i;
+      ctx.fillStyle = '#666';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(formatSpeed(value), padding.left - 5, y + 3);
+    }
+
+    // Draw RX line
+    ctx.strokeStyle = '#4ec9b0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    history.forEach((entry, index) => {
+      const x = padding.left + (chartWidth / (history.length - 1)) * index;
+      const y = padding.top + chartHeight - (entry.rx_speed / maxValue) * chartHeight;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Draw TX line
+    ctx.strokeStyle = '#569cd6';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    history.forEach((entry, index) => {
+      const x = padding.left + (chartWidth / (history.length - 1)) * index;
+      const y = padding.top + chartHeight - (entry.tx_speed / maxValue) * chartHeight;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  };
+
+  // Update process modal chart periodically
+  useEffect(() => {
+    if (processModal?.show && processModal?.details) {
+      const interval = setInterval(refreshProcessModal, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [processModal?.show, processModal?.details?.pid]);
+
+  const formatMemory = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
+
   const getInterfaceIcon = (iface: NetworkInterface) => {
     if (iface.type === 'Loopback') return 'lo';
     if (iface.is_wireless) return 'wifi';
@@ -523,7 +657,7 @@ function Network() {
                   return (
                     <tr key={proc.pid} className={throttle ? 'throttled' : ''}>
                       <td>{proc.pid}</td>
-                      <td className="process-name">{proc.name}</td>
+                      <td className="process-name clickable" onClick={() => openProcessModal(proc.pid)}>{proc.name}</td>
                       <td>{proc.user}</td>
                       <td>{proc.connections}</td>
                       <td className="speed-down">{proc.rx_speed_formatted}</td>
@@ -694,6 +828,100 @@ function Network() {
               <button onClick={() => setThrottleModal(null)} className="btn-cancel">Cancel</button>
               <button onClick={handleSetThrottle} className="btn-apply">Apply Limit</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Process Details Modal */}
+      {processModal?.show && (
+        <div className="process-overlay">
+          <div className="process-modal">
+            <div className="process-modal-header">
+              <h3>Process Details</h3>
+              <button onClick={() => setProcessModal(null)} className="btn-close">✕</button>
+            </div>
+
+            {processModal.loading && (
+              <div className="process-modal-loading">Loading...</div>
+            )}
+
+            {processModal.error && (
+              <div className="process-modal-error">{processModal.error}</div>
+            )}
+
+            {processModal.details && (
+              <div className="process-modal-content">
+                <div className="process-info-header">
+                  <span className="process-modal-name">{processModal.details.name}</span>
+                  <span className="process-modal-pid">PID: {processModal.details.pid}</span>
+                  <span className={`process-state state-${processModal.details.state?.toLowerCase()}`}>
+                    {processModal.details.state}
+                  </span>
+                </div>
+
+                <div className="process-cmdline">
+                  {processModal.details.cmdline || '(no command line)'}
+                </div>
+
+                <div className="process-stats-grid">
+                  <div className="process-stat">
+                    <span className="stat-label">User</span>
+                    <span className="stat-value">{processModal.details.user}</span>
+                  </div>
+                  <div className="process-stat">
+                    <span className="stat-label">Threads</span>
+                    <span className="stat-value">{processModal.details.threads}</span>
+                  </div>
+                  <div className="process-stat">
+                    <span className="stat-label">Memory (RSS)</span>
+                    <span className="stat-value">{formatMemory(processModal.details.memory_rss)}</span>
+                  </div>
+                  <div className="process-stat">
+                    <span className="stat-label">Memory (VMS)</span>
+                    <span className="stat-value">{formatMemory(processModal.details.memory_vms)}</span>
+                  </div>
+                  <div className="process-stat">
+                    <span className="stat-label">Connections</span>
+                    <span className="stat-value">{processModal.details.connections}</span>
+                  </div>
+                  <div className="process-stat">
+                    <span className="stat-label">Started</span>
+                    <span className="stat-value">{processModal.details.start_time ? new Date(processModal.details.start_time).toLocaleString() : '-'}</span>
+                  </div>
+                </div>
+
+                <div className="process-network-stats">
+                  <div className="process-speed download">
+                    <span className="speed-label">Download</span>
+                    <span className="speed-value">{formatSpeed(processModal.details.rx_speed)}</span>
+                    <span className="speed-total">Total: {formatMemory(processModal.details.rx_bytes)}</span>
+                  </div>
+                  <div className="process-speed upload">
+                    <span className="speed-label">Upload</span>
+                    <span className="speed-value">{formatSpeed(processModal.details.tx_speed)}</span>
+                    <span className="speed-total">Total: {formatMemory(processModal.details.tx_bytes)}</span>
+                  </div>
+                </div>
+
+                <div className="process-history-chart">
+                  <h4>Network History</h4>
+                  <canvas ref={processCanvasRef} width={500} height={120} className="process-chart-canvas" />
+                  <div className="chart-legend">
+                    <span className="legend-rx">● Download</span>
+                    <span className="legend-tx">● Upload</span>
+                  </div>
+                </div>
+
+                <div className="process-actions">
+                  <button onClick={() => handleKillProcess('TERM')} className="btn-kill term">
+                    Terminate (SIGTERM)
+                  </button>
+                  <button onClick={() => handleKillProcess('KILL')} className="btn-kill kill">
+                    Kill (SIGKILL)
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

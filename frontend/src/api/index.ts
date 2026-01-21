@@ -401,7 +401,50 @@ export const networkAPI = {
     const response = await api.delete(`/network/throttle/${pid}`);
     return response.data;
   },
+
+  // Process management
+  getProcessDetails: async (pid: number): Promise<ProcessDetails> => {
+    const response = await api.get<{ success: boolean; process: ProcessDetails }>(`/network/process/${pid}`);
+    return response.data.process;
+  },
+
+  getProcessHistory: async (pid: number): Promise<ProcessHistoryEntry[]> => {
+    const response = await api.get<{ success: boolean; history: ProcessHistoryEntry[] }>(`/network/process/${pid}/history`);
+    return response.data.history;
+  },
+
+  killProcess: async (pid: number, signal: string = 'TERM'): Promise<{ success: boolean; error?: string; message?: string }> => {
+    const response = await api.post(`/network/process/${pid}/kill`, { signal });
+    return response.data;
+  },
 };
+
+export interface ProcessHistoryEntry {
+  timestamp: string;
+  rx_speed: number;
+  tx_speed: number;
+  rx_bytes: number;
+  tx_bytes: number;
+}
+
+export interface ProcessDetails {
+  pid: number;
+  name: string;
+  cmdline: string;
+  user: string;
+  state: string;
+  threads: number;
+  memory_rss: number;
+  memory_vms: number;
+  cpu_percent: number;
+  start_time: string;
+  connections: number;
+  rx_bytes: number;
+  tx_bytes: number;
+  rx_speed: number;
+  tx_speed: number;
+  history: ProcessHistoryEntry[];
+}
 
 export interface ProcessThrottle {
   pid: number;

@@ -61,31 +61,61 @@ CREATE TABLE IF NOT EXISTS virtual_machines (
     cpu_cores INT DEFAULT 2,
     ram_mb INT DEFAULT 2048,
 
+    -- Extended CPU Configuration
+    cpu_type VARCHAR(50) DEFAULT 'host',
+    cpu_pinning VARCHAR(255),
+    numa_topology TEXT,
+
+    -- Extended Memory Configuration
+    balloon_enabled BOOLEAN DEFAULT TRUE,
+    hugepages_enabled BOOLEAN DEFAULT FALSE,
+
     -- Disk Configuration
     disk_path VARCHAR(255),
     disk_size_gb INT DEFAULT 20,
     disk_format ENUM('qcow2', 'raw', 'vmdk') DEFAULT 'qcow2',
+    cache_mode VARCHAR(20) DEFAULT 'writeback',
+    discard_enabled BOOLEAN DEFAULT TRUE,
 
     -- Boot Configuration
     boot_order VARCHAR(50) DEFAULT 'cd,hd',
     iso_path VARCHAR(255),
     boot_from_disk BOOLEAN DEFAULT FALSE,
     physical_disk_device VARCHAR(50),
+    firmware_type ENUM('bios', 'uefi') DEFAULT 'bios',
+    secure_boot BOOLEAN DEFAULT FALSE,
+    tpm_enabled BOOLEAN DEFAULT FALSE,
 
     -- Network Configuration
     network_mode ENUM('nat', 'bridge', 'user', 'none') DEFAULT 'nat',
     network_bridge VARCHAR(50),
     mac_address VARCHAR(17),
+    network_model VARCHAR(20) DEFAULT 'virtio',
+    vlan_id INT,
+    bandwidth_limit_down INT,
+    bandwidth_limit_up INT,
 
     -- Display Configuration
     display_type ENUM('spice', 'vnc', 'none') DEFAULT 'spice',
     spice_port INT,
     vnc_port INT,
     spice_password VARCHAR(50),
+    vnc_password VARCHAR(50),
+    qmp_socket_path VARCHAR(255),
 
     -- Status
     status ENUM('stopped', 'running', 'paused', 'error') DEFAULT 'stopped',
     pid INT,
+
+    -- Options
+    autostart BOOLEAN DEFAULT FALSE,
+    autostart_delay INT DEFAULT 0,
+    tags VARCHAR(500),
+    os_type VARCHAR(50),
+    os_version VARCHAR(50),
+
+    -- Template
+    template_id INT,
 
     -- Metadata
     created_by INT,
@@ -96,7 +126,8 @@ CREATE TABLE IF NOT EXISTS virtual_machines (
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_name (name),
     INDEX idx_status (status),
-    INDEX idx_uuid (uuid)
+    INDEX idx_uuid (uuid),
+    INDEX idx_autostart (autostart)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- VM Backups Table
@@ -228,10 +259,52 @@ CREATE TABLE IF NOT EXISTS system_logs (
     user_id INT,
     ip_address VARCHAR(45),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_level (level),
     INDEX idx_user_id (user_id),
     INDEX idx_created (created_at),
     INDEX idx_ip_address (ip_address)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Notifications Table (In-App Notifications)
+CREATE TABLE IF NOT EXISTS notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    type ENUM('info', 'warning', 'error', 'success') DEFAULT 'info',
+    title VARCHAR(255) NOT NULL,
+    message TEXT,
+    source VARCHAR(100),
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_is_read (is_read),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Alert Rules Table
+CREATE TABLE IF NOT EXISTS alert_rules (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    condition_type VARCHAR(50) NOT NULL,
+    threshold FLOAT NOT NULL,
+    comparison ENUM('gt', 'lt', 'eq') DEFAULT 'gt',
+    severity ENUM('info', 'warning', 'critical') DEFAULT 'warning',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_condition (condition_type),
+    INDEX idx_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Dashboard Config Table (Widget Layout)
+CREATE TABLE IF NOT EXISTS dashboard_config (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNIQUE,
+    layout JSON,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
