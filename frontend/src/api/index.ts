@@ -455,3 +455,216 @@ export interface ProcessThrottle {
   class_id: number;
 }
 
+// Temperature types
+export interface SensorReading {
+  name: string;
+  temperature: number;
+  critical?: number;
+  high?: number;
+  unit: string;
+}
+
+export interface TemperatureInfo {
+  cpu: SensorReading[];
+  gpu: SensorReading[];
+  disks: SensorReading[];
+  sensors: SensorReading[];
+}
+
+export const temperatureAPI = {
+  get: async (): Promise<TemperatureInfo> => {
+    const response = await api.get<{ success: boolean; temperature: TemperatureInfo }>('/system/temperature');
+    return response.data.temperature;
+  },
+};
+
+// Storage types
+export interface DiskInfo {
+  name: string;
+  model: string;
+  size: number;
+  size_formatted: string;
+  type: string; // ssd, hdd, nvme
+  serial?: string;
+  vendor?: string;
+}
+
+export interface PartitionInfo {
+  device: string;
+  mount_point: string;
+  filesystem: string;
+  total: number;
+  used: number;
+  available: number;
+  usage_percent: number;
+  total_formatted: string;
+  used_formatted: string;
+  available_formatted: string;
+}
+
+export const storageAPI = {
+  getDisks: async (): Promise<DiskInfo[]> => {
+    const response = await api.get<{ success: boolean; disks: DiskInfo[] }>('/storage/disks');
+    return response.data.disks;
+  },
+
+  getPartitions: async (): Promise<PartitionInfo[]> => {
+    const response = await api.get<{ success: boolean; partitions: PartitionInfo[] }>('/storage/partitions');
+    return response.data.partitions;
+  },
+};
+
+// Notification types
+export interface Notification {
+  id: number;
+  user_id?: number;
+  type: 'info' | 'warning' | 'error' | 'success';
+  title: string;
+  message: string;
+  source: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export const notificationsAPI = {
+  list: async (options?: { limit?: number; unread?: boolean }): Promise<{ notifications: Notification[]; unread_count: number }> => {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set('limit', options.limit.toString());
+    if (options?.unread) params.set('unread', 'true');
+    const response = await api.get<{ success: boolean; notifications: Notification[]; unread_count: number }>(`/notifications?${params.toString()}`);
+    return { notifications: response.data.notifications, unread_count: response.data.unread_count };
+  },
+
+  markRead: async (id: number): Promise<{ success: boolean }> => {
+    const response = await api.post<{ success: boolean }>(`/notifications/${id}/read`);
+    return response.data;
+  },
+
+  markAllRead: async (): Promise<{ success: boolean }> => {
+    const response = await api.post<{ success: boolean }>('/notifications/read-all');
+    return response.data;
+  },
+
+  delete: async (id: number): Promise<{ success: boolean }> => {
+    const response = await api.delete<{ success: boolean }>(`/notifications/${id}`);
+    return response.data;
+  },
+};
+
+// Alert types
+export interface AlertRule {
+  id: number;
+  name: string;
+  condition_type: 'cpu' | 'memory' | 'disk' | 'temperature' | 'swap';
+  threshold: number;
+  comparison: 'gt' | 'lt' | 'eq';
+  severity: 'info' | 'warning' | 'critical';
+  is_active: boolean;
+  created_by?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ActiveAlert {
+  rule_id: number;
+  rule_name: string;
+  type: string;
+  severity: string;
+  current_value: number;
+  threshold: number;
+  comparison: string;
+  message: string;
+  triggered_at: string;
+}
+
+export const alertsAPI = {
+  getRules: async (): Promise<AlertRule[]> => {
+    const response = await api.get<{ success: boolean; rules: AlertRule[] }>('/alerts/rules');
+    return response.data.rules;
+  },
+
+  createRule: async (rule: Partial<AlertRule>): Promise<{ success: boolean; rule_id: number }> => {
+    const response = await api.post<{ success: boolean; rule_id: number }>('/alerts/rules', rule);
+    return response.data;
+  },
+
+  updateRule: async (id: number, rule: Partial<AlertRule>): Promise<{ success: boolean }> => {
+    const response = await api.put<{ success: boolean }>(`/alerts/rules/${id}`, rule);
+    return response.data;
+  },
+
+  deleteRule: async (id: number): Promise<{ success: boolean }> => {
+    const response = await api.delete<{ success: boolean }>(`/alerts/rules/${id}`);
+    return response.data;
+  },
+
+  getActive: async (): Promise<ActiveAlert[]> => {
+    const response = await api.get<{ success: boolean; alerts: ActiveAlert[] }>('/alerts/active');
+    return response.data.alerts;
+  },
+};
+
+// Dashboard config types
+export interface WidgetConfig {
+  id: string;
+  type: string;
+  visible: boolean;
+  order: number;
+}
+
+export interface DashboardConfig {
+  layout: WidgetConfig[];
+}
+
+export const dashboardAPI = {
+  getConfig: async (): Promise<DashboardConfig> => {
+    const response = await api.get<{ success: boolean; config: DashboardConfig }>('/dashboard/config');
+    return response.data.config;
+  },
+
+  saveConfig: async (config: DashboardConfig): Promise<{ success: boolean }> => {
+    const response = await api.put<{ success: boolean }>('/dashboard/config', config);
+    return response.data;
+  },
+};
+
+// Logs types
+export interface SystemLog {
+  id: number;
+  level: 'error' | 'warning' | 'info' | 'debug';
+  message: string;
+  context?: string;
+  user_id?: number;
+  ip_address?: string;
+  created_at: string;
+}
+
+export interface ActivityLog {
+  id: number;
+  user_id?: number;
+  username?: string;
+  action: string;
+  description: string;
+  ip_address?: string;
+  created_at: string;
+}
+
+export const logsAPI = {
+  getLogs: async (options?: { level?: string; limit?: number; offset?: number }): Promise<{ logs: SystemLog[]; total: number }> => {
+    const params = new URLSearchParams();
+    if (options?.level) params.set('level', options.level);
+    if (options?.limit) params.set('limit', options.limit.toString());
+    if (options?.offset) params.set('offset', options.offset.toString());
+    const response = await api.get<{ success: boolean; logs: SystemLog[]; total: number }>(`/logs?${params.toString()}`);
+    return { logs: response.data.logs, total: response.data.total };
+  },
+
+  getActivityLogs: async (options?: { limit?: number; offset?: number }): Promise<{ logs: ActivityLog[]; total: number }> => {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set('limit', options.limit.toString());
+    if (options?.offset) params.set('offset', options.offset.toString());
+    const response = await api.get<{ success: boolean; logs: ActivityLog[]; total: number }>(`/logs/activity?${params.toString()}`);
+    return { logs: response.data.logs, total: response.data.total };
+  },
+};
+

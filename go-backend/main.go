@@ -116,6 +116,30 @@ func main() {
 	api.HandleFunc("/logs", RequireAuth(GetLogsHandler)).Methods("GET")
 	api.HandleFunc("/logs/activity", RequireAuth(GetActivityLogsHandler)).Methods("GET")
 
+	// Temperature routes
+	api.HandleFunc("/system/temperature", RequireAuth(GetTemperatureHandler)).Methods("GET")
+
+	// Storage routes
+	api.HandleFunc("/storage/disks", RequireAuth(GetStorageDisksHandler)).Methods("GET")
+	api.HandleFunc("/storage/partitions", RequireAuth(GetStoragePartitionsHandler)).Methods("GET")
+
+	// Notification routes
+	api.HandleFunc("/notifications", RequireAuth(GetNotificationsHandler)).Methods("GET")
+	api.HandleFunc("/notifications/{id}/read", RequireAuth(MarkNotificationReadHandler)).Methods("POST")
+	api.HandleFunc("/notifications/read-all", RequireAuth(MarkAllNotificationsReadHandler)).Methods("POST")
+	api.HandleFunc("/notifications/{id}", RequireAuth(DeleteNotificationHandler)).Methods("DELETE")
+
+	// Alert routes
+	api.HandleFunc("/alerts/rules", RequireAuth(GetAlertRulesHandler)).Methods("GET")
+	api.HandleFunc("/alerts/rules", RequireAuth(RequireAdmin(CreateAlertRuleHandler))).Methods("POST")
+	api.HandleFunc("/alerts/rules/{id}", RequireAuth(RequireAdmin(UpdateAlertRuleHandler))).Methods("PUT")
+	api.HandleFunc("/alerts/rules/{id}", RequireAuth(RequireAdmin(DeleteAlertRuleHandler))).Methods("DELETE")
+	api.HandleFunc("/alerts/active", RequireAuth(GetActiveAlertsHandler)).Methods("GET")
+
+	// Dashboard config routes
+	api.HandleFunc("/dashboard/config", RequireAuth(GetDashboardConfigHandler)).Methods("GET")
+	api.HandleFunc("/dashboard/config", RequireAuth(SaveDashboardConfigHandler)).Methods("PUT")
+
 	// Network routes
 	api.HandleFunc("/network/interfaces", RequireAuth(ListNetworkInterfacesHandler)).Methods("GET")
 	api.HandleFunc("/network/interfaces/{name}", RequireAuth(GetNetworkInterfaceHandler)).Methods("GET")

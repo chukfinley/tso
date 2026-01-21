@@ -19,6 +19,13 @@ interface ProcessModalState {
   error: string | null;
 }
 
+interface ContextMenuState {
+  show: boolean;
+  x: number;
+  y: number;
+  process: NetworkProcess | null;
+}
+
 function Network() {
   const [activeTab, setActiveTab] = useState<TabType>('interfaces');
   const [interfaces, setInterfaces] = useState<NetworkInterface[]>([]);
@@ -37,6 +44,7 @@ function Network() {
   const [throttleSupported, setThrottleSupported] = useState<boolean | null>(null);
   const [throttleError, setThrottleError] = useState<string | null>(null);
   const [processModal, setProcessModal] = useState<ProcessModalState | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({ show: false, x: 0, y: 0, process: null });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const processCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -51,6 +59,66 @@ function Network() {
       drawChart();
     }
   }, [history, activeTab]);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClick = () => setContextMenu(prev => ({ ...prev, show: false }));
+    const handleScroll = () => setContextMenu(prev => ({ ...prev, show: false }));
+
+    if (contextMenu.show) {
+      document.addEventListener('click', handleClick);
+      document.addEventListener('scroll', handleScroll, true);
+      return () => {
+        document.removeEventListener('click', handleClick);
+        document.removeEventListener('scroll', handleScroll, true);
+      };
+    }
+  }, [contextMenu.show]);
+
+  const handleProcessRightClick = (e: React.MouseEvent, proc: NetworkProcess) => {
+    e.preventDefault();
+    setContextMenu({
+      show: true,
+      x: e.clientX,
+      y: e.clientY,
+      process: proc,
+    });
+  };
+
+  const handleContextMenuAction = async (action: string) => {
+    if (!contextMenu.process) return;
+    const proc = contextMenu.process;
+    setContextMenu({ show: false, x: 0, y: 0, process: null });
+
+    switch (action) {
+      case 'details':
+        openProcessModal(proc.pid);
+        break;
+      case 'limit':
+        openThrottleModal(proc.pid, proc.name);
+        break;
+      case 'kill':
+        if (confirm(`Kill process "${proc.name}" (PID: ${proc.pid}) with SIGTERM?`)) {
+          try {
+            await networkAPI.killProcess(proc.pid, 'TERM');
+            fetchData();
+          } catch (err) {
+            alert('Failed to kill process');
+          }
+        }
+        break;
+      case 'force-kill':
+        if (confirm(`FORCE kill process "${proc.name}" (PID: ${proc.pid}) with SIGKILL?`)) {
+          try {
+            await networkAPI.killProcess(proc.pid, 'KILL');
+            fetchData();
+          } catch (err) {
+            alert('Failed to kill process');
+          }
+        }
+        break;
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -655,9 +723,13 @@ function Network() {
                 processes.map((proc) => {
                   const throttle = getThrottleForPid(proc.pid);
                   return (
-                    <tr key={proc.pid} className={throttle ? 'throttled' : ''}>
+                    <tr
+                      key={proc.pid}
+                      className={`process-row ${throttle ? 'throttled' : ''}`}
+                      onContextMenu={(e) => handleProcessRightClick(e, proc)}
+                    >
                       <td>{proc.pid}</td>
-                      <td className="process-name clickable" onClick={() => openProcessModal(proc.pid)}>{proc.name}</td>
+                      <td className="process-name">{proc.name}</td>
                       <td>{proc.user}</td>
                       <td>{proc.connections}</td>
                       <td className="speed-down">{proc.rx_speed_formatted}</td>
@@ -923,6 +995,37 @@ function Network() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu.show && contextMenu.process && (
+        <div
+          className="process-context-menu"
+          style={{
+            position: 'fixed',
+            top: contextMenu.y,
+            left: contextMenu.x,
+            zIndex: 10000,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="context-menu-header">
+            {contextMenu.process.name} (PID: {contextMenu.process.pid})
+          </div>
+          <button onClick={() => handleContextMenuAction('details')} className="context-menu-item">
+            📊 View Details & History
+          </button>
+          <button onClick={() => handleContextMenuAction('limit')} className="context-menu-item" disabled={throttleSupported === false}>
+            🔒 Set Bandwidth Limit
+          </button>
+          <div className="context-menu-separator" />
+          <button onClick={() => handleContextMenuAction('kill')} className="context-menu-item danger">
+            ⚠️ Terminate (SIGTERM)
+          </button>
+          <button onClick={() => handleContextMenuAction('force-kill')} className="context-menu-item danger">
+            💀 Force Kill (SIGKILL)
+          </button>
         </div>
       )}
     </div>

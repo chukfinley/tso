@@ -1087,16 +1087,79 @@ tr.throttled {
 }
 
 /* Clickable process name */
-.process-name.clickable {
-  cursor: pointer;
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-underline-offset: 2px;
+/* Process row hover for right-click */
+.process-row {
+  cursor: context-menu;
 }
 
-.process-name.clickable:hover {
-  color: #6ed9c5;
-  text-decoration-style: solid;
+.process-row:hover {
+  background: rgba(110, 217, 197, 0.1);
+}
+
+/* Context Menu */
+.process-context-menu {
+  background: #1e1e1e;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  min-width: 220px;
+  overflow: hidden;
+  animation: contextMenuFadeIn 0.15s ease-out;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.context-menu-header {
+  padding: 10px 14px;
+  background: #252525;
+  font-size: 0.8rem;
+  color: #888;
+  border-bottom: 1px solid #3a3a3a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: #e0e0e0;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+.context-menu-item:hover:not(:disabled) {
+  background: rgba(110, 217, 197, 0.15);
+}
+
+.context-menu-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.context-menu-item.danger:hover:not(:disabled) {
+  background: rgba(255, 82, 82, 0.2);
+  color: #ff5252;
+}
+
+.context-menu-separator {
+  height: 1px;
+  background: #3a3a3a;
+  margin: 4px 0;
 }
 
 /* Responsive */

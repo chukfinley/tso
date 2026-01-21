@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
 import { systemAPI, SystemStats } from '../api';
+import {
+  TemperatureWidget,
+  StorageWidget,
+  VMsWidget,
+  LogsWidget,
+  AlertsWidget,
+  NetworkWidget,
+} from '../components/widgets';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -8,7 +16,7 @@ function Dashboard() {
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 1000);
+    const interval = setInterval(fetchStats, 2000);
     return () => clearInterval(interval);
   }, []);
 
@@ -23,110 +31,95 @@ function Dashboard() {
   };
 
   if (loading || !stats) {
-    return <div>Loading...</div>;
+    return (
+      <div className="dashboard">
+        <h1>Dashboard</h1>
+        <div className="loading-state">Loading system information...</div>
+      </div>
+    );
   }
 
   return (
     <div className="dashboard">
       <h1>Dashboard</h1>
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-content">
-            <h3>{stats.cpu.cores}</h3>
-            <p>CPU Cores</p>
-          </div>
-          <div className="stat-icon">⚙️</div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-content">
-            <h3>{stats.memory.usage_percent.toFixed(1)}%</h3>
-            <p>Memory Usage</p>
-          </div>
-          <div className="stat-icon">💾</div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-content">
-            <h3>{stats.uptime.formatted}</h3>
-            <p>Uptime</p>
-          </div>
-          <div className="stat-icon">⏱️</div>
-        </div>
-      </div>
-
-      <div className="monitoring-grid">
-        <div className="card">
-          <div className="card-header">CPU</div>
-          <div className="card-body">
-            <div className="monitor-stat">
-              <div className="stat-label">Model</div>
-              <div className="stat-value">{stats.cpu.model}</div>
+      {/* System Overview Section */}
+      <section className="dashboard-section">
+        <h2>System Overview</h2>
+        <div className="overview-cards">
+          <div className="overview-card">
+            <div className="overview-value">
+              <span className="value">{stats.cpu.usage?.toFixed(1) || '0'}%</span>
+              <span className="label">CPU Usage</span>
             </div>
-            <div className="monitor-stat">
-              <div className="stat-label">Usage</div>
-              <div className="progress-container">
-                <div
-                  className={`progress-bar ${stats.cpu.usage > 80 ? 'danger' : stats.cpu.usage > 60 ? 'warning' : ''}`}
-                  style={{ width: `${stats.cpu.usage}%` }}
-                ></div>
-                <div className="progress-text">{stats.cpu.usage.toFixed(1)}%</div>
-              </div>
+            <div className="overview-progress">
+              <div
+                className={`progress-fill ${stats.cpu.usage > 80 ? 'danger' : stats.cpu.usage > 60 ? 'warning' : ''}`}
+                style={{ width: `${stats.cpu.usage || 0}%` }}
+              />
             </div>
-            <div className="monitor-stat">
-              <div className="stat-label">Load Average</div>
-              <div className="stat-value">
-                {stats.cpu.load_avg['1min'].toFixed(2)} / {stats.cpu.load_avg['5min'].toFixed(2)} / {stats.cpu.load_avg['15min'].toFixed(2)}
-              </div>
+            <div className="overview-detail">
+              Load: {stats.cpu.load_avg['1min'].toFixed(2)} / {stats.cpu.load_avg['5min'].toFixed(2)} / {stats.cpu.load_avg['15min'].toFixed(2)}
             </div>
           </div>
-        </div>
 
-        <div className="card">
-          <div className="card-header">Memory</div>
-          <div className="card-body">
-            <div className="monitor-stat">
-              <div className="stat-label">Total</div>
-              <div className="stat-value">{stats.memory.total_formatted}</div>
+          <div className="overview-card">
+            <div className="overview-value">
+              <span className="value">{stats.memory.usage_percent.toFixed(1)}%</span>
+              <span className="label">Memory</span>
             </div>
-            <div className="monitor-stat">
-              <div className="stat-label">Used / Available</div>
-              <div className="stat-value">
-                {stats.memory.used_formatted} / {stats.memory.available_formatted}
-              </div>
+            <div className="overview-progress">
+              <div
+                className={`progress-fill ${stats.memory.usage_percent > 85 ? 'danger' : stats.memory.usage_percent > 70 ? 'warning' : ''}`}
+                style={{ width: `${stats.memory.usage_percent}%` }}
+              />
             </div>
-            <div className="monitor-stat">
-              <div className="stat-label">Usage</div>
-              <div className="progress-container">
-                <div
-                  className={`progress-bar ${stats.memory.usage_percent > 85 ? 'danger' : stats.memory.usage_percent > 70 ? 'warning' : ''}`}
-                  style={{ width: `${stats.memory.usage_percent}%` }}
-                ></div>
-                <div className="progress-text">{stats.memory.usage_percent.toFixed(1)}%</div>
-              </div>
+            <div className="overview-detail">
+              {stats.memory.used_formatted} / {stats.memory.total_formatted}
+            </div>
+          </div>
+
+          <div className="overview-card">
+            <div className="overview-value">
+              <span className="value">{stats.swap.usage_percent?.toFixed(1) || '0'}%</span>
+              <span className="label">Swap</span>
+            </div>
+            <div className="overview-progress">
+              <div
+                className={`progress-fill ${stats.swap.usage_percent > 50 ? 'warning' : ''}`}
+                style={{ width: `${stats.swap.usage_percent || 0}%` }}
+              />
+            </div>
+            <div className="overview-detail">
+              {stats.swap.used_formatted} / {stats.swap.total_formatted}
+            </div>
+          </div>
+
+          <div className="overview-card">
+            <div className="overview-value">
+              <span className="value uptime">{stats.uptime.formatted}</span>
+              <span className="label">Uptime</span>
+            </div>
+            <div className="overview-detail">
+              {stats.cpu.cores} cores | {stats.cpu.architecture}
             </div>
           </div>
         </div>
+      </section>
 
-        <div className="card">
-          <div className="card-header">Network</div>
-          <div className="card-body">
-            {stats.network.map((iface) => (
-              <div key={iface.name} className="network-interface">
-                <div className="interface-header">
-                  <span>{iface.name}</span>
-                  <span className={iface.is_up ? 'status-up' : 'status-down'}>
-                    {iface.is_up ? '●' : '○'} {iface.status}
-                  </span>
-                </div>
-                <div className="interface-details">
-                  <div>IP: {iface.ip}</div>
-                  <div>↓ {iface.rx_formatted} ↑ {iface.tx_formatted}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Widgets Grid */}
+      <div className="widgets-grid">
+        <div className="widget-column">
+          <TemperatureWidget />
+          <NetworkWidget />
+        </div>
+        <div className="widget-column">
+          <StorageWidget />
+          <VMsWidget />
+        </div>
+        <div className="widget-column">
+          <LogsWidget />
+          <AlertsWidget />
         </div>
       </div>
     </div>
@@ -134,4 +127,3 @@ function Dashboard() {
 }
 
 export default Dashboard;
-

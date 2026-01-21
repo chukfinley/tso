@@ -153,6 +153,125 @@ CREATE TABLE IF NOT EXISTS vm_backups (
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- VM Snapshots Table
+CREATE TABLE IF NOT EXISTS vm_snapshots (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    vm_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    snapshot_type ENUM('disk', 'memory', 'full') DEFAULT 'disk',
+    parent_id INT,
+    size_bytes BIGINT,
+    status ENUM('creating', 'completed', 'failed', 'restoring') DEFAULT 'creating',
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP NULL,
+
+    FOREIGN KEY (vm_id) REFERENCES virtual_machines(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id) REFERENCES vm_snapshots(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    UNIQUE KEY unique_vm_snapshot_name (vm_id, name),
+    INDEX idx_vm_id (vm_id),
+    INDEX idx_status (status),
+    INDEX idx_parent (parent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- VM Templates Table
+CREATE TABLE IF NOT EXISTS vm_templates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+
+    -- Configuration (JSON blob for flexibility)
+    cpu_cores INT DEFAULT 2,
+    ram_mb INT DEFAULT 2048,
+    cpu_type VARCHAR(50) DEFAULT 'host',
+    disk_size_gb INT DEFAULT 20,
+    disk_format ENUM('qcow2', 'raw', 'vmdk') DEFAULT 'qcow2',
+    network_mode ENUM('nat', 'bridge', 'user', 'none') DEFAULT 'nat',
+    display_type ENUM('spice', 'vnc', 'none') DEFAULT 'spice',
+    firmware_type ENUM('bios', 'uefi') DEFAULT 'bios',
+    os_type VARCHAR(50),
+    os_version VARCHAR(50),
+
+    -- Template disk (if any)
+    disk_path VARCHAR(500),
+    disk_size_actual BIGINT,
+
+    -- Cloud-init support
+    cloud_init_enabled BOOLEAN DEFAULT FALSE,
+    cloud_init_user_data TEXT,
+    cloud_init_meta_data TEXT,
+    cloud_init_network_config TEXT,
+
+    -- Status
+    is_public BOOLEAN DEFAULT TRUE,
+    download_count INT DEFAULT 0,
+
+    -- Metadata
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_name (name),
+    INDEX idx_os_type (os_type),
+    INDEX idx_public (is_public)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ISO Library Table
+CREATE TABLE IF NOT EXISTS iso_library (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_size BIGINT,
+    checksum_sha256 VARCHAR(64),
+    os_type VARCHAR(50),
+    os_version VARCHAR(50),
+    description TEXT,
+
+    -- Download tracking
+    download_url VARCHAR(1000),
+    download_status ENUM('pending', 'downloading', 'completed', 'failed') DEFAULT 'completed',
+    download_progress INT DEFAULT 100,
+    download_error TEXT,
+
+    -- Status
+    is_predefined BOOLEAN DEFAULT FALSE,
+    is_verified BOOLEAN DEFAULT FALSE,
+
+    -- Metadata
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    UNIQUE KEY unique_filename (filename),
+    INDEX idx_os_type (os_type),
+    INDEX idx_download_status (download_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- VM Passthrough Devices Table
+CREATE TABLE IF NOT EXISTS vm_passthrough_devices (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    vm_id INT NOT NULL,
+    device_type ENUM('gpu', 'usb', 'pci') NOT NULL,
+    pci_address VARCHAR(20),
+    usb_vendor_id VARCHAR(10),
+    usb_product_id VARCHAR(10),
+    iommu_group INT,
+    device_name VARCHAR(100),
+    driver_override VARCHAR(50),
+    is_active BOOLEAN DEFAULT TRUE,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (vm_id) REFERENCES virtual_machines(id) ON DELETE CASCADE,
+    INDEX idx_vm_id (vm_id),
+    INDEX idx_device_type (device_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Network Shares Table
 CREATE TABLE IF NOT EXISTS shares (
     id INT AUTO_INCREMENT PRIMARY KEY,
