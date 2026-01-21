@@ -1,8 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { networkAPI, NetworkInterface, NetworkProcess, NetworkConnection, BandwidthHistoryEntry, NetworkEvent } from '../api';
+import { networkAPI, NetworkInterface, NetworkProcess, NetworkConnection, BandwidthHistoryEntry, NetworkEvent, ProcessThrottle } from '../api';
 import './Network.css';
 
 type TabType = 'interfaces' | 'processes' | 'connections' | 'events';
+
+interface ThrottleModalState {
+  show: boolean;
+  pid: number;
+  name: string;
+  downloadLimit: string;
+  uploadLimit: string;
+}
 
 function Network() {
   const [activeTab, setActiveTab] = useState<TabType>('interfaces');
@@ -17,6 +25,10 @@ function Network() {
   const [expandedInterface, setExpandedInterface] = useState<string | null>(null);
   const [togglingInterface, setTogglingInterface] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ show: boolean; interface: string; warning: string } | null>(null);
+  const [throttles, setThrottles] = useState<ProcessThrottle[]>([]);
+  const [throttleModal, setThrottleModal] = useState<ThrottleModalState | null>(null);
+  const [throttleSupported, setThrottleSupported] = useState<boolean | null>(null);
+  const [throttleError, setThrottleError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -42,8 +54,21 @@ function Network() {
         const ifaceData = await networkAPI.getInterfaces();
         setSessionStart(ifaceData.session_start);
       } else if (activeTab === 'processes') {
-        const data = await networkAPI.getProcesses();
-        setProcesses(data);
+        const [processData, throttleData] = await Promise.all([
+          networkAPI.getProcesses(),
+          networkAPI.getThrottles(),
+        ]);
+        setProcesses(processData);
+        setThrottles(throttleData || []);
+        // Check throttle support on first load
+        if (throttleSupported === null) {
+          try {
+            const support = await networkAPI.checkThrottleSupport();
+            setThrottleSupported(support.throttle_supported);
+          } catch {
+            setThrottleSupported(false);
+          }
+        }
       } else if (activeTab === 'connections') {
         const data = await networkAPI.getConnections();
         setConnections(data);
@@ -196,6 +221,69 @@ function Network() {
     } catch (err) {
       setError('Failed to reset session');
     }
+  };
+
+  const openThrottleModal = (pid: number, name: string) => {
+    // Check if process is already throttled
+    const existing = throttles.find(t => t.pid === pid);
+    setThrottleModal({
+      show: true,
+      pid,
+      name,
+      downloadLimit: existing ? formatBytesToMbit(existing.download_limit) : '',
+      uploadLimit: existing ? formatBytesToMbit(existing.upload_limit) : '',
+    });
+    setThrottleError(null);
+  };
+
+  const handleSetThrottle = async () => {
+    if (!throttleModal) return;
+
+    const downloadMbit = parseFloat(throttleModal.downloadLimit) || 0;
+    const uploadMbit = parseFloat(throttleModal.uploadLimit) || 0;
+
+    // Convert Mbit/s to bytes/s (Mbit/s * 1000000 / 8)
+    const downloadBytes = Math.floor(downloadMbit * 125000);
+    const uploadBytes = Math.floor(uploadMbit * 125000);
+
+    if (downloadBytes === 0 && uploadBytes === 0) {
+      setThrottleError('Please set at least one limit');
+      return;
+    }
+
+    try {
+      const result = await networkAPI.setThrottle(throttleModal.pid, downloadBytes, uploadBytes);
+      if (!result.success) {
+        setThrottleError(result.error || 'Failed to set throttle');
+        return;
+      }
+      setThrottleModal(null);
+      await fetchData();
+    } catch (err) {
+      setThrottleError('Failed to set bandwidth limit');
+    }
+  };
+
+  const handleRemoveThrottle = async (pid: number) => {
+    try {
+      const result = await networkAPI.removeThrottle(pid);
+      if (!result.success) {
+        setError(result.error || 'Failed to remove throttle');
+        return;
+      }
+      await fetchData();
+    } catch (err) {
+      setError('Failed to remove bandwidth limit');
+    }
+  };
+
+  const formatBytesToMbit = (bytes: number): string => {
+    if (bytes === 0) return '';
+    return (bytes / 125000).toFixed(1);
+  };
+
+  const getThrottleForPid = (pid: number): ProcessThrottle | undefined => {
+    return throttles.find(t => t.pid === pid);
   };
 
   const getInterfaceIcon = (iface: NetworkInterface) => {
@@ -408,6 +496,11 @@ function Network() {
 
       {activeTab === 'processes' && (
         <div className="processes-section">
+          {throttleSupported === false && (
+            <div className="throttle-warning">
+              Bandwidth throttling is not available. Enable cgroups net_cls to use this feature.
+            </div>
+          )}
           <table className="processes-table">
             <thead>
               <tr>
@@ -417,22 +510,65 @@ function Network() {
                 <th>Connections</th>
                 <th>RX Speed</th>
                 <th>TX Speed</th>
+                <th>Limit</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {processes.length === 0 ? (
-                <tr><td colSpan={6} className="no-data">No processes with network activity</td></tr>
+                <tr><td colSpan={8} className="no-data">No processes with network activity</td></tr>
               ) : (
-                processes.map((proc) => (
-                  <tr key={proc.pid}>
-                    <td>{proc.pid}</td>
-                    <td className="process-name">{proc.name}</td>
-                    <td>{proc.user}</td>
-                    <td>{proc.connections}</td>
-                    <td className="speed-down">{proc.rx_speed_formatted}</td>
-                    <td className="speed-up">{proc.tx_speed_formatted}</td>
-                  </tr>
-                ))
+                processes.map((proc) => {
+                  const throttle = getThrottleForPid(proc.pid);
+                  return (
+                    <tr key={proc.pid} className={throttle ? 'throttled' : ''}>
+                      <td>{proc.pid}</td>
+                      <td className="process-name">{proc.name}</td>
+                      <td>{proc.user}</td>
+                      <td>{proc.connections}</td>
+                      <td className="speed-down">{proc.rx_speed_formatted}</td>
+                      <td className="speed-up">{proc.tx_speed_formatted}</td>
+                      <td className="throttle-info">
+                        {throttle ? (
+                          <span className="throttle-badge">
+                            ↓{formatBytesToMbit(throttle.download_limit) || '∞'} / ↑{formatBytesToMbit(throttle.upload_limit) || '∞'} Mbit/s
+                          </span>
+                        ) : (
+                          <span className="no-limit">-</span>
+                        )}
+                      </td>
+                      <td className="throttle-actions">
+                        {throttle ? (
+                          <>
+                            <button
+                              className="btn-throttle edit"
+                              onClick={() => openThrottleModal(proc.pid, proc.name)}
+                              title="Edit limit"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn-throttle remove"
+                              onClick={() => handleRemoveThrottle(proc.pid)}
+                              title="Remove limit"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="btn-throttle"
+                            onClick={() => openThrottleModal(proc.pid, proc.name)}
+                            disabled={throttleSupported === false}
+                            title={throttleSupported === false ? 'Throttling not supported' : 'Set bandwidth limit'}
+                          >
+                            Limit
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -498,6 +634,67 @@ function Network() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Throttle Modal */}
+      {throttleModal?.show && (
+        <div className="throttle-overlay">
+          <div className="throttle-modal">
+            <h3>Bandwidth Limit</h3>
+            <p className="throttle-process-name">
+              {throttleModal.name} (PID: {throttleModal.pid})
+            </p>
+
+            {throttleError && (
+              <div className="throttle-modal-error">{throttleError}</div>
+            )}
+
+            <div className="throttle-form">
+              <div className="throttle-input-group">
+                <label>Download Limit (Mbit/s)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  placeholder="0 = unlimited"
+                  value={throttleModal.downloadLimit}
+                  onChange={(e) => setThrottleModal({
+                    ...throttleModal,
+                    downloadLimit: e.target.value,
+                  })}
+                />
+              </div>
+
+              <div className="throttle-input-group">
+                <label>Upload Limit (Mbit/s)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  placeholder="0 = unlimited"
+                  value={throttleModal.uploadLimit}
+                  onChange={(e) => setThrottleModal({
+                    ...throttleModal,
+                    uploadLimit: e.target.value,
+                  })}
+                />
+              </div>
+            </div>
+
+            <div className="throttle-presets">
+              <span>Presets:</span>
+              <button onClick={() => setThrottleModal({ ...throttleModal, downloadLimit: '1', uploadLimit: '0.5' })}>1 Mbit</button>
+              <button onClick={() => setThrottleModal({ ...throttleModal, downloadLimit: '5', uploadLimit: '2' })}>5 Mbit</button>
+              <button onClick={() => setThrottleModal({ ...throttleModal, downloadLimit: '10', uploadLimit: '5' })}>10 Mbit</button>
+              <button onClick={() => setThrottleModal({ ...throttleModal, downloadLimit: '50', uploadLimit: '25' })}>50 Mbit</button>
+            </div>
+
+            <div className="throttle-modal-buttons">
+              <button onClick={() => setThrottleModal(null)} className="btn-cancel">Cancel</button>
+              <button onClick={handleSetThrottle} className="btn-apply">Apply Limit</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

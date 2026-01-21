@@ -367,5 +367,48 @@ export const networkAPI = {
     const response = await api.post<{ success: boolean }>('/network/session/reset');
     return response.data;
   },
+
+  // Throttling
+  checkThrottleSupport: async (): Promise<{
+    throttle_supported: boolean;
+    ifb_supported: boolean;
+    issues: string[];
+    net_cls_path: string;
+  }> => {
+    const response = await api.get('/network/throttle/support');
+    return response.data;
+  },
+
+  getThrottles: async (): Promise<ProcessThrottle[]> => {
+    const response = await api.get<{ success: boolean; throttles: ProcessThrottle[] }>('/network/throttle');
+    return response.data.throttles;
+  },
+
+  setThrottle: async (pid: number, downloadLimit: number, uploadLimit: number): Promise<{
+    success: boolean;
+    error?: string;
+    throttle?: ProcessThrottle;
+  }> => {
+    const response = await api.post('/network/throttle', {
+      pid,
+      download_limit: downloadLimit,
+      upload_limit: uploadLimit,
+    });
+    return response.data;
+  },
+
+  removeThrottle: async (pid: number): Promise<{ success: boolean; error?: string }> => {
+    const response = await api.delete(`/network/throttle/${pid}`);
+    return response.data;
+  },
 };
+
+export interface ProcessThrottle {
+  pid: number;
+  name: string;
+  download_limit: number;
+  upload_limit: number;
+  interface: string;
+  class_id: number;
+}
 

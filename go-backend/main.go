@@ -110,6 +110,7 @@ func main() {
 
 	// Terminal routes
 	api.HandleFunc("/terminal/execute", RequireAuth(RequireAdmin(ExecuteTerminalHandler))).Methods("POST")
+	api.HandleFunc("/terminal/ws", RequireAuth(RequireAdmin(TerminalWebSocketHandler))).Methods("GET")
 
 	// Logs routes
 	api.HandleFunc("/logs", RequireAuth(GetLogsHandler)).Methods("GET")
@@ -125,6 +126,12 @@ func main() {
 	api.HandleFunc("/network/processes", RequireAuth(GetNetworkProcessesHandler)).Methods("GET")
 	api.HandleFunc("/network/connections", RequireAuth(GetNetworkConnectionsHandler)).Methods("GET")
 	api.HandleFunc("/network/session/reset", RequireAuth(ResetSessionStatsHandler)).Methods("POST")
+
+	// Network throttling routes
+	api.HandleFunc("/network/throttle/support", RequireAuth(CheckThrottleSupportHandler)).Methods("GET")
+	api.HandleFunc("/network/throttle", RequireAuth(RequireAdmin(GetProcessThrottlesHandler))).Methods("GET")
+	api.HandleFunc("/network/throttle", RequireAuth(RequireAdmin(SetProcessThrottleHandler))).Methods("POST")
+	api.HandleFunc("/network/throttle/{pid}", RequireAuth(RequireAdmin(RemoveProcessThrottleHandler))).Methods("DELETE")
 
 	// Frontend routes (serve static files and SPA routing)
 	// Find frontend dist directory

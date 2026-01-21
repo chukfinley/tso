@@ -908,6 +908,385 @@ func addBandwidthHistory(totalRx, totalTx float64, interfacesRx, interfacesTx ma
 
 var networkEventID = 0
 
+// Process bandwidth throttling
+type ProcessThrottle struct {
+	PID           int    `json:"pid"`
+	Name          string `json:"name"`
+	DownloadLimit int64  `json:"download_limit"` // bytes per second (0 = unlimited)
+	UploadLimit   int64  `json:"upload_limit"`   // bytes per second (0 = unlimited)
+	Interface     string `json:"interface"`
+	ClassID       int    `json:"class_id"`
+	CgroupPath    string `json:"cgroup_path"`
+}
+
+var (
+	processThrottles     = make(map[int]*ProcessThrottle)
+	processThrottlesLock sync.RWMutex
+	nextClassID          = 100 // Start class IDs from 100
+	throttleInitialized  = make(map[string]bool) // Track initialized interfaces
+)
+
+// SetProcessThrottleHandler sets bandwidth limits for a process
+func SetProcessThrottleHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		PID           int    `json:"pid"`
+		DownloadLimit int64  `json:"download_limit"` // bytes per second
+		UploadLimit   int64  `json:"upload_limit"`   // bytes per second
+		Interface     string `json:"interface"`      // Optional, defaults to default route interface
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.PID <= 0 {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "Invalid PID",
+		})
+		return
+	}
+
+	// Check if process exists
+	if _, err := os.Stat(fmt.Sprintf("/proc/%d", req.PID)); os.IsNotExist(err) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "Process not found",
+		})
+		return
+	}
+
+	// Get process name
+	procName := ""
+	if data, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", req.PID)); err == nil {
+		procName = strings.TrimSpace(string(data))
+	}
+
+	// Determine interface if not specified
+	iface := req.Interface
+	if iface == "" {
+		iface = getDefaultInterface()
+	}
+	if iface == "" {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "Could not determine network interface",
+		})
+		return
+	}
+
+	// Check if cgroups net_cls is available
+	netClsPath := "/sys/fs/cgroup/net_cls"
+	if _, err := os.Stat(netClsPath); os.IsNotExist(err) {
+		// Try cgroup v1 legacy location
+		netClsPath = "/sys/fs/cgroup/net_cls,net_prio"
+		if _, err := os.Stat(netClsPath); os.IsNotExist(err) {
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   "cgroups net_cls not available. You may need to mount it: mount -t cgroup -o net_cls net_cls /sys/fs/cgroup/net_cls",
+			})
+			return
+		}
+	}
+
+	// Initialize tc on interface if needed
+	if !throttleInitialized[iface] {
+		if err := initializeThrottleInterface(iface); err != nil {
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   fmt.Sprintf("Failed to initialize throttling on %s: %v", iface, err),
+			})
+			return
+		}
+		throttleInitialized[iface] = true
+	}
+
+	processThrottlesLock.Lock()
+	defer processThrottlesLock.Unlock()
+
+	// Check if already throttled
+	existing, exists := processThrottles[req.PID]
+	var classID int
+	if exists {
+		classID = existing.ClassID
+	} else {
+		classID = nextClassID
+		nextClassID++
+	}
+
+	// Create cgroup for process
+	cgroupPath := fmt.Sprintf("%s/throttle_%d", netClsPath, req.PID)
+	if !exists {
+		if err := os.MkdirAll(cgroupPath, 0755); err != nil {
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   fmt.Sprintf("Failed to create cgroup: %v", err),
+			})
+			return
+		}
+	}
+
+	// Move process to cgroup
+	tasksFile := fmt.Sprintf("%s/tasks", cgroupPath)
+	// Also try cgroup.procs for newer systems
+	procsFile := fmt.Sprintf("%s/cgroup.procs", cgroupPath)
+
+	written := false
+	if err := os.WriteFile(tasksFile, []byte(strconv.Itoa(req.PID)), 0644); err == nil {
+		written = true
+	}
+	if !written {
+		if err := os.WriteFile(procsFile, []byte(strconv.Itoa(req.PID)), 0644); err != nil {
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"error":   fmt.Sprintf("Failed to add process to cgroup: %v", err),
+			})
+			return
+		}
+	}
+
+	// Set class ID for cgroup (format: 0xAAAABBBB where AAAA is major, BBBB is minor)
+	classIDHex := fmt.Sprintf("0x%04x%04x", 1, classID)
+	classIDFile := fmt.Sprintf("%s/net_cls.classid", cgroupPath)
+	if err := os.WriteFile(classIDFile, []byte(classIDHex), 0644); err != nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to set class ID: %v", err),
+		})
+		return
+	}
+
+	// Create/update tc class with bandwidth limits
+	downloadRate := "1000mbit" // Default unlimited
+	uploadRate := "1000mbit"
+
+	if req.DownloadLimit > 0 {
+		// Convert bytes/s to kbit/s (multiply by 8 for bits, divide by 1000 for kbit)
+		kbits := (req.DownloadLimit * 8) / 1000
+		if kbits < 1 {
+			kbits = 1
+		}
+		downloadRate = fmt.Sprintf("%dkbit", kbits)
+	}
+
+	if req.UploadLimit > 0 {
+		kbits := (req.UploadLimit * 8) / 1000
+		if kbits < 1 {
+			kbits = 1
+		}
+		uploadRate = fmt.Sprintf("%dkbit", kbits)
+	}
+
+	// Remove existing class if updating
+	if exists {
+		exec.Command("tc", "class", "del", "dev", iface, "classid", fmt.Sprintf("1:%d", classID)).Run()
+	}
+
+	// Add tc class for upload (egress)
+	cmd := exec.Command("tc", "class", "add", "dev", iface, "parent", "1:", "classid", fmt.Sprintf("1:%d", classID), "htb", "rate", uploadRate, "ceil", uploadRate)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to create tc class: %v - %s", err, string(output)),
+		})
+		return
+	}
+
+	// Add tc filter to match the cgroup class
+	filterCmd := exec.Command("tc", "filter", "add", "dev", iface, "parent", "1:", "handle", fmt.Sprintf("%d:", classID), "cgroup")
+	filterCmd.Run() // Ignore errors, filter might already exist
+
+	// For ingress (download) limiting, we need IFB (Intermediate Functional Block)
+	if req.DownloadLimit > 0 {
+		setupIngressThrottle(iface, classID, downloadRate)
+	}
+
+	throttle := &ProcessThrottle{
+		PID:           req.PID,
+		Name:          procName,
+		DownloadLimit: req.DownloadLimit,
+		UploadLimit:   req.UploadLimit,
+		Interface:     iface,
+		ClassID:       classID,
+		CgroupPath:    cgroupPath,
+	}
+	processThrottles[req.PID] = throttle
+
+	logNetworkEvent("throttle_set", iface, fmt.Sprintf("Bandwidth limit set for %s (PID %d)", procName, req.PID),
+		fmt.Sprintf("Download: %s, Upload: %s", downloadRate, uploadRate))
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":  true,
+		"message":  fmt.Sprintf("Bandwidth limits set for process %d", req.PID),
+		"throttle": throttle,
+	})
+}
+
+// RemoveProcessThrottleHandler removes bandwidth limits for a process
+func RemoveProcessThrottleHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	pidStr := vars["pid"]
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		http.Error(w, "Invalid PID", http.StatusBadRequest)
+		return
+	}
+
+	processThrottlesLock.Lock()
+	defer processThrottlesLock.Unlock()
+
+	throttle, exists := processThrottles[pid]
+	if !exists {
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"error":   "Process is not throttled",
+		})
+		return
+	}
+
+	// Remove tc class
+	exec.Command("tc", "class", "del", "dev", throttle.Interface, "classid", fmt.Sprintf("1:%d", throttle.ClassID)).Run()
+
+	// Remove cgroup (process will be moved to parent)
+	os.Remove(throttle.CgroupPath)
+
+	delete(processThrottles, pid)
+
+	logNetworkEvent("throttle_removed", throttle.Interface, fmt.Sprintf("Bandwidth limit removed for %s (PID %d)", throttle.Name, pid), "")
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("Bandwidth limits removed for process %d", pid),
+	})
+}
+
+// GetProcessThrottlesHandler lists all throttled processes
+func GetProcessThrottlesHandler(w http.ResponseWriter, r *http.Request) {
+	processThrottlesLock.RLock()
+	defer processThrottlesLock.RUnlock()
+
+	throttles := make([]*ProcessThrottle, 0, len(processThrottles))
+	for _, t := range processThrottles {
+		// Check if process still exists
+		if _, err := os.Stat(fmt.Sprintf("/proc/%d", t.PID)); os.IsNotExist(err) {
+			continue // Skip dead processes
+		}
+		throttles = append(throttles, t)
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":   true,
+		"throttles": throttles,
+	})
+}
+
+// initializeThrottleInterface sets up tc qdisc on interface for throttling
+func initializeThrottleInterface(iface string) error {
+	// Remove existing qdisc (ignore errors)
+	exec.Command("tc", "qdisc", "del", "dev", iface, "root").Run()
+
+	// Create HTB qdisc
+	cmd := exec.Command("tc", "qdisc", "add", "dev", iface, "root", "handle", "1:", "htb", "default", "99")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create qdisc: %v - %s", err, string(output))
+	}
+
+	// Create default class (unlimited)
+	cmd = exec.Command("tc", "class", "add", "dev", iface, "parent", "1:", "classid", "1:99", "htb", "rate", "1000mbit")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create default class: %v - %s", err, string(output))
+	}
+
+	return nil
+}
+
+// setupIngressThrottle sets up ingress (download) throttling using IFB
+func setupIngressThrottle(iface string, classID int, rate string) error {
+	ifbDev := "ifb0"
+
+	// Load ifb module
+	exec.Command("modprobe", "ifb", "numifbs=1").Run()
+
+	// Bring up ifb device
+	exec.Command("ip", "link", "set", "dev", ifbDev, "up").Run()
+
+	// Setup ingress qdisc on main interface
+	exec.Command("tc", "qdisc", "add", "dev", iface, "handle", "ffff:", "ingress").Run()
+
+	// Redirect ingress to ifb
+	exec.Command("tc", "filter", "add", "dev", iface, "parent", "ffff:", "protocol", "ip", "u32", "match", "u32", "0", "0", "action", "mirred", "egress", "redirect", "dev", ifbDev).Run()
+
+	// Setup HTB on ifb for ingress shaping
+	exec.Command("tc", "qdisc", "del", "dev", ifbDev, "root").Run()
+	exec.Command("tc", "qdisc", "add", "dev", ifbDev, "root", "handle", "1:", "htb", "default", "99").Run()
+	exec.Command("tc", "class", "add", "dev", ifbDev, "parent", "1:", "classid", "1:99", "htb", "rate", "1000mbit").Run()
+
+	// Add class for this process on ifb
+	cmd := exec.Command("tc", "class", "add", "dev", ifbDev, "parent", "1:", "classid", fmt.Sprintf("1:%d", classID), "htb", "rate", rate, "ceil", rate)
+	cmd.Run()
+
+	// Add cgroup filter on ifb
+	exec.Command("tc", "filter", "add", "dev", ifbDev, "parent", "1:", "handle", fmt.Sprintf("%d:", classID), "cgroup").Run()
+
+	return nil
+}
+
+// getDefaultInterface returns the default route interface
+func getDefaultInterface() string {
+	cmd := exec.Command("ip", "route", "show", "default")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	// Parse "default via X.X.X.X dev INTERFACE"
+	fields := strings.Fields(string(output))
+	for i, f := range fields {
+		if f == "dev" && i+1 < len(fields) {
+			return fields[i+1]
+		}
+	}
+	return ""
+}
+
+// CheckThrottleSupport checks if bandwidth throttling is supported
+func CheckThrottleSupportHandler(w http.ResponseWriter, r *http.Request) {
+	supported := true
+	issues := []string{}
+
+	// Check for tc command
+	if _, err := exec.LookPath("tc"); err != nil {
+		supported = false
+		issues = append(issues, "tc command not found (install iproute2)")
+	}
+
+	// Check for cgroups net_cls
+	netClsPath := "/sys/fs/cgroup/net_cls"
+	if _, err := os.Stat(netClsPath); os.IsNotExist(err) {
+		netClsPath = "/sys/fs/cgroup/net_cls,net_prio"
+		if _, err := os.Stat(netClsPath); os.IsNotExist(err) {
+			supported = false
+			issues = append(issues, "cgroups net_cls not mounted. Run: mount -t cgroup -o net_cls net_cls /sys/fs/cgroup/net_cls")
+		}
+	}
+
+	// Check for ifb module (for download limiting)
+	ifbSupported := true
+	if output, err := exec.Command("modprobe", "-n", "ifb").CombinedOutput(); err != nil {
+		ifbSupported = false
+		issues = append(issues, fmt.Sprintf("ifb module not available (download limiting may not work): %s", string(output)))
+	}
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"success":            true,
+		"throttle_supported": supported,
+		"ifb_supported":      ifbSupported,
+		"issues":             issues,
+		"net_cls_path":       netClsPath,
+	})
+}
+
 func logNetworkEvent(eventType, iface, description, details string) {
 	networkEventsLock.Lock()
 	defer networkEventsLock.Unlock()

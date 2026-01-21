@@ -604,6 +604,212 @@
   background: #d43d3d;
 }
 
+/* Throttle Styles */
+.throttle-warning {
+  background: #3a2a1a;
+  color: #f4a747;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+.throttle-info {
+  white-space: nowrap;
+}
+
+.throttle-badge {
+  background: #1a2a3a;
+  color: #569cd6;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.no-limit {
+  color: #666;
+}
+
+.throttle-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-throttle {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: #1a2a3a;
+  color: #569cd6;
+  transition: all 0.2s;
+}
+
+.btn-throttle:hover {
+  background: #2a3a4a;
+}
+
+.btn-throttle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-throttle.edit {
+  background: #1a3a35;
+  color: #4ec9b0;
+}
+
+.btn-throttle.edit:hover {
+  background: #2a4a45;
+}
+
+.btn-throttle.remove {
+  background: #3a1a1a;
+  color: #f44747;
+}
+
+.btn-throttle.remove:hover {
+  background: #4a2a2a;
+}
+
+tr.throttled {
+  background: rgba(86, 156, 214, 0.1);
+}
+
+/* Throttle Modal */
+.throttle-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.throttle-modal {
+  background: #252525;
+  border: 1px solid #569cd6;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.throttle-modal h3 {
+  margin: 0 0 8px 0;
+  color: #569cd6;
+  font-size: 1.2rem;
+}
+
+.throttle-process-name {
+  color: #4ec9b0;
+  font-family: 'JetBrains Mono', monospace;
+  margin: 0 0 16px 0;
+  font-size: 0.9rem;
+}
+
+.throttle-modal-error {
+  background: #3a1a1a;
+  color: #f44747;
+  padding: 10px 12px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+}
+
+.throttle-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.throttle-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.throttle-input-group label {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.throttle-input-group input {
+  padding: 10px 12px;
+  border-radius: 4px;
+  border: 1px solid #444;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  font-size: 1rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.throttle-input-group input:focus {
+  outline: none;
+  border-color: #569cd6;
+}
+
+.throttle-presets {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.throttle-presets span {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.throttle-presets button {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #444;
+  background: #1a1a1a;
+  color: #888;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.throttle-presets button:hover {
+  background: #2a2a2a;
+  border-color: #569cd6;
+  color: #e0e0e0;
+}
+
+.throttle-modal-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btn-apply {
+  padding: 8px 16px;
+  background: #569cd6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.btn-apply:hover {
+  background: #4a8cc6;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .interfaces-grid {
