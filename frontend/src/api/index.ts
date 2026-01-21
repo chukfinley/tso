@@ -214,3 +214,158 @@ export const usersAPI = {
   },
 };
 
+export interface TerminalResponse {
+  success: boolean;
+  output: string;
+  error: boolean;
+  cwd: string;
+}
+
+export const terminalAPI = {
+  execute: async (command: string, cwd?: string): Promise<TerminalResponse> => {
+    const response = await api.post<TerminalResponse>('/terminal/execute', { command, cwd });
+    return response.data;
+  },
+};
+
+export interface NetworkInterface {
+  name: string;
+  display_name: string;
+  type: string;
+  status: string;
+  is_up: boolean;
+  ip: string;
+  ipv6: string;
+  subnet: string;
+  gateway: string;
+  mac: string;
+  mtu: number;
+  speed: string;
+  duplex: string;
+  rx_bytes: number;
+  tx_bytes: number;
+  rx_formatted: string;
+  tx_formatted: string;
+  rx_session: number;
+  tx_session: number;
+  rx_session_formatted: string;
+  tx_session_formatted: string;
+  rx_speed: number;
+  tx_speed: number;
+  rx_speed_formatted: string;
+  tx_speed_formatted: string;
+  rx_packets: number;
+  tx_packets: number;
+  rx_errors: number;
+  tx_errors: number;
+  rx_dropped: number;
+  tx_dropped: number;
+  driver: string;
+  is_virtual: boolean;
+  is_wireless: boolean;
+}
+
+export interface NetworkProcess {
+  pid: number;
+  name: string;
+  user: string;
+  connections: number;
+  rx_bytes: number;
+  tx_bytes: number;
+  rx_speed: number;
+  tx_speed: number;
+  rx_speed_formatted: string;
+  tx_speed_formatted: string;
+}
+
+export interface NetworkConnection {
+  protocol: string;
+  state: string;
+  recv_q: string;
+  send_q: string;
+  local: string;
+  remote?: string;
+  process?: string;
+}
+
+export interface BandwidthHistoryEntry {
+  timestamp: string;
+  total_rx_speed: number;
+  total_tx_speed: number;
+  interfaces_rx: Record<string, number>;
+  interfaces_tx: Record<string, number>;
+}
+
+export interface NetworkEvent {
+  id: number;
+  timestamp: string;
+  type: string;
+  interface: string;
+  description: string;
+  details: string;
+}
+
+export const networkAPI = {
+  getInterfaces: async (): Promise<{ interfaces: NetworkInterface[]; session_start: string }> => {
+    const response = await api.get<{ success: boolean; interfaces: NetworkInterface[]; session_start: string }>('/network/interfaces');
+    return response.data;
+  },
+
+  getInterface: async (name: string): Promise<NetworkInterface> => {
+    const response = await api.get<{ success: boolean; interface: NetworkInterface }>(`/network/interfaces/${name}`);
+    return response.data.interface;
+  },
+
+  toggleInterface: async (name: string, action: 'up' | 'down', force?: boolean): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+    is_active_conn?: boolean;
+    warning?: string;
+  }> => {
+    const response = await api.post(`/network/interfaces/${name}/toggle`, { action, force });
+    return response.data;
+  },
+
+  getBandwidth: async (): Promise<{
+    interfaces: NetworkInterface[];
+    total_rx: number;
+    total_tx: number;
+    total_rx_formatted: string;
+    total_tx_formatted: string;
+    total_rx_speed: number;
+    total_tx_speed: number;
+    total_rx_speed_fmt: string;
+    total_tx_speed_fmt: string;
+    history: BandwidthHistoryEntry[];
+  }> => {
+    const response = await api.get('/network/bandwidth');
+    return response.data;
+  },
+
+  getHistory: async (): Promise<BandwidthHistoryEntry[]> => {
+    const response = await api.get<{ success: boolean; history: BandwidthHistoryEntry[] }>('/network/history');
+    return response.data.history;
+  },
+
+  getEvents: async (): Promise<NetworkEvent[]> => {
+    const response = await api.get<{ success: boolean; events: NetworkEvent[] }>('/network/events');
+    return response.data.events;
+  },
+
+  getProcesses: async (): Promise<NetworkProcess[]> => {
+    const response = await api.get<{ success: boolean; processes: NetworkProcess[] }>('/network/processes');
+    return response.data.processes;
+  },
+
+  getConnections: async (): Promise<NetworkConnection[]> => {
+    const response = await api.get<{ success: boolean; connections: NetworkConnection[] }>('/network/connections');
+    return response.data.connections;
+  },
+
+  resetSession: async (): Promise<{ success: boolean }> => {
+    const response = await api.post<{ success: boolean }>('/network/session/reset');
+    return response.data;
+  },
+};
+

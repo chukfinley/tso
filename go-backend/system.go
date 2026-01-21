@@ -352,6 +352,7 @@ func SystemControlHandler(w http.ResponseWriter, r *http.Request) {
 func ExecuteTerminalHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Command string `json:"command"`
+		Cwd     string `json:"cwd"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -359,13 +360,41 @@ func ExecuteTerminalHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default to /root if no cwd specified
+	workDir := req.Cwd
+	if workDir == "" || workDir == "~" {
+		workDir = "/root"
+	}
+
+	// Expand ~ to /root
+	if len(workDir) > 0 && workDir[0] == '~' {
+		workDir = "/root" + workDir[1:]
+	}
+
 	cmd := exec.Command("bash", "-c", req.Command)
+	cmd.Dir = workDir
 	output, err := cmd.CombinedOutput()
+
+	// Get the new working directory after command execution
+	pwdCmd := exec.Command("bash", "-c", "pwd")
+	if req.Command != "" && len(req.Command) >= 2 && req.Command[:2] == "cd" {
+		// If it was a cd command, run pwd in the context of that cd
+		pwdCmd = exec.Command("bash", "-c", req.Command+" && pwd")
+		pwdCmd.Dir = workDir
+	} else {
+		pwdCmd.Dir = workDir
+	}
+	pwdOutput, _ := pwdCmd.Output()
+	newCwd := strings.TrimSpace(string(pwdOutput))
+	if newCwd == "" {
+		newCwd = workDir
+	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": err == nil,
 		"output":  string(output),
 		"error":   err != nil,
+		"cwd":     newCwd,
 	})
 }
 

@@ -115,6 +115,17 @@ func main() {
 	api.HandleFunc("/logs", RequireAuth(GetLogsHandler)).Methods("GET")
 	api.HandleFunc("/logs/activity", RequireAuth(GetActivityLogsHandler)).Methods("GET")
 
+	// Network routes
+	api.HandleFunc("/network/interfaces", RequireAuth(ListNetworkInterfacesHandler)).Methods("GET")
+	api.HandleFunc("/network/interfaces/{name}", RequireAuth(GetNetworkInterfaceHandler)).Methods("GET")
+	api.HandleFunc("/network/interfaces/{name}/toggle", RequireAuth(RequireAdmin(ToggleNetworkInterfaceHandler))).Methods("POST")
+	api.HandleFunc("/network/bandwidth", RequireAuth(GetNetworkBandwidthHandler)).Methods("GET")
+	api.HandleFunc("/network/history", RequireAuth(GetNetworkHistoryHandler)).Methods("GET")
+	api.HandleFunc("/network/events", RequireAuth(GetNetworkEventsHandler)).Methods("GET")
+	api.HandleFunc("/network/processes", RequireAuth(GetNetworkProcessesHandler)).Methods("GET")
+	api.HandleFunc("/network/connections", RequireAuth(GetNetworkConnectionsHandler)).Methods("GET")
+	api.HandleFunc("/network/session/reset", RequireAuth(ResetSessionStatsHandler)).Methods("POST")
+
 	// Frontend routes (serve static files and SPA routing)
 	// Find frontend dist directory
 	installDir := os.Getenv("INSTALL_DIR")

@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Shares from './pages/Shares';
 import VMs from './pages/VMs';
+import Network from './pages/Network';
 import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import Terminal from './pages/Terminal';
@@ -43,6 +44,7 @@ function AppRoutes() {
         <Route path="users" element={<Users />} />
         <Route path="shares" element={<Shares />} />
         <Route path="vms" element={<VMs />} />
+        <Route path="network" element={<Network />} />
         <Route path="logs" element={<Logs />} />
         <Route path="settings" element={<Settings />} />
         <Route path="terminal" element={<Terminal />} />

@@ -1,0 +1,193 @@
+.terminal-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 120px);
+  padding: 20px;
+}
+
+.terminal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.terminal-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #e0e0e0;
+}
+
+.terminal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-clear {
+  padding: 8px 16px;
+  background: #3a3a3a;
+  color: #e0e0e0;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background-color 0.2s;
+}
+
+.btn-clear:hover {
+  background: #4a4a4a;
+}
+
+.terminal-container {
+  flex: 1;
+  background: #1a1a1a;
+  border-radius: 8px;
+  border: 1px solid #333;
+  overflow: hidden;
+  cursor: text;
+}
+
+.terminal-output {
+  height: 100%;
+  padding: 16px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.terminal-welcome {
+  color: #888;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #333;
+}
+
+.terminal-entry {
+  margin-bottom: 8px;
+}
+
+.terminal-command-line,
+.terminal-input-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.terminal-prompt {
+  display: flex;
+  white-space: nowrap;
+}
+
+.prompt-user {
+  color: #4ec9b0;
+  font-weight: bold;
+}
+
+.prompt-at {
+  color: #808080;
+}
+
+.prompt-host {
+  color: #569cd6;
+  font-weight: bold;
+}
+
+.prompt-colon {
+  color: #808080;
+}
+
+.prompt-path {
+  color: #dcdcaa;
+}
+
+.prompt-symbol {
+  color: #808080;
+  margin-left: 4px;
+}
+
+.terminal-command {
+  color: #e0e0e0;
+}
+
+.terminal-output-text {
+  margin: 4px 0 0 0;
+  padding: 0;
+  color: #c0c0c0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.terminal-output-text.error {
+  color: #f44747;
+}
+
+.terminal-input-line {
+  margin-top: 8px;
+}
+
+.terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+  caret-color: #4ec9b0;
+}
+
+.terminal-input:disabled {
+  opacity: 0.7;
+}
+
+.terminal-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #4ec9b0;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.terminal-hints {
+  display: flex;
+  gap: 24px;
+  margin-top: 12px;
+  padding: 8px 0;
+  color: #666;
+  font-size: 0.75rem;
+}
+
+.terminal-hints span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Scrollbar styling */
+.terminal-output::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terminal-output::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+.terminal-output::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 4px;
+}
+
+.terminal-output::-webkit-scrollbar-thumb:hover {
+  background: #4a4a4a;
+}

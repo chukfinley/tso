@@ -19,6 +19,7 @@ function Layout() {
         </div>
         <div className="navbar-menu">
           <Link to="/dashboard">Dashboard</Link>
+          <Link to="/network">Network</Link>
           <Link to="/shares">Shares</Link>
           <Link to="/vms">VMs</Link>
           {user?.role === 'admin' && (
